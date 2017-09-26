@@ -47,7 +47,9 @@ pub struct TimerHandle {
 }
 
 mod timeout;
+mod interval;
 pub use self::timeout::Timeout;
+pub use self::interval::Interval;
 
 struct Inner {
     /// List of updates the `Timer` needs to process
