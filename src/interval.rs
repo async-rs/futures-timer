@@ -4,6 +4,7 @@ use std::io;
 use futures::prelude::*;
 
 use {Timeout, TimerHandle};
+use timeout;
 
 /// A stream representing notifications at fixed interval
 ///
@@ -65,7 +66,7 @@ impl Stream for Interval {
         if self.timeout.poll()?.is_not_ready() {
             return Ok(Async::NotReady)
         }
-        let next = next_interval(self.timeout.fires_at(),
+        let next = next_interval(timeout::fires_at(&self.timeout),
                                  Instant::now(),
                                  self.interval);
         self.timeout.reset_at(next);

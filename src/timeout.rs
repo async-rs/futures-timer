@@ -120,10 +120,10 @@ impl Timeout {
             timeouts.task.notify();
         }
     }
+}
 
-    pub fn fires_at(&self) -> Instant {
-        self.when
-    }
+pub fn fires_at(timeout: &Timeout) -> Instant {
+    timeout.when
 }
 
 impl Future for Timeout {
