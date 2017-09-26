@@ -3,6 +3,7 @@ extern crate futures_timer;
 
 use std::time::{Instant, Duration};
 
+use futures::future;
 use futures::prelude::*;
 use futures_timer::{Timer, Timeout};
 
@@ -13,7 +14,7 @@ fn far_future() -> Instant {
 #[test]
 fn works() {
     let i = Instant::now();
-    let dur = Duration::new(0, 100);
+    let dur = Duration::from_millis(100);
     let d = Timeout::new(dur);
     d.wait().unwrap();
     assert!(i.elapsed() > dur);
@@ -34,4 +35,18 @@ fn drop_makes_inert() {
     let timeout = Timeout::new_handle(far_future(), handle);
     drop(t);
     assert!(timeout.wait().is_err());
+}
+
+#[test]
+fn reset() {
+    let i = Instant::now();
+    let dur = Duration::from_millis(100);
+    let mut d = Timeout::new(dur);
+    future::poll_fn(|| d.poll()).wait().unwrap();
+    assert!(i.elapsed() > dur);
+
+    let i = Instant::now();
+    d.reset(dur);
+    future::poll_fn(|| d.poll()).wait().unwrap();
+    assert!(i.elapsed() > dur);
 }

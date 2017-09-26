@@ -1,7 +1,7 @@
 extern crate futures;
 
 use std::cmp::Ordering;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Weak, Mutex};
 use std::time::Instant;
@@ -60,7 +60,12 @@ struct Inner {
 /// Shared state between the `Timer` and a `Timeout`.
 struct ScheduledTimer {
     task: AtomicTask,
-    ready: AtomicBool,
+
+    // The lowest bit here is whether the timer has fired or not, and all the
+    // other bits are the "generation" of the timer which is reset during the
+    // `reset` function. Only timers for a matching generation are fired.
+    state: AtomicUsize,
+
     inner: Weak<Inner>,
     at: Mutex<Option<Instant>>,
 
@@ -73,6 +78,7 @@ struct ScheduledTimer {
 /// also containing some payload data.
 struct HeapTimer {
     at: Instant,
+    gen: usize,
     node: Arc<Node<ScheduledTimer>>,
 }
 
@@ -126,8 +132,11 @@ impl Timer {
             // blocked.
             let heap_timer = self.timer_heap.pop().unwrap();
             *heap_timer.node.slot.lock().unwrap() = None;
-            heap_timer.node.ready.store(true, SeqCst);
-            heap_timer.node.task.notify();
+            let bits = heap_timer.gen << 1;
+            match heap_timer.node.state.compare_exchange(bits, bits | 1, SeqCst, SeqCst) {
+                Ok(_) => heap_timer.node.task.notify(),
+                Err(_b) => {}
+            }
         }
     }
 
@@ -139,12 +148,14 @@ impl Timer {
         // TODO: avoid remove + push and instead just do one sift of the heap?
         // In theory we could update it in place and then do the percolation
         // as necessary
+        let gen = node.state.load(SeqCst) >> 1;
         let mut slot = node.slot.lock().unwrap();
         if let Some(heap_slot) = slot.take() {
             self.timer_heap.remove(heap_slot);
         }
         *slot = Some(self.timer_heap.push(HeapTimer {
             at: at,
+            gen: gen,
             node: node.clone(),
         }));
     }

@@ -5,7 +5,8 @@
 
 use std::io;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{Ordering, AtomicBool};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::SeqCst;
 use std::time::{Duration, Instant};
 
 use futures::{Future, Poll, Async};
@@ -65,7 +66,7 @@ impl Timeout {
         };
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
-            ready: AtomicBool::new(false),
+            state: AtomicUsize::new(0),
             task: AtomicTask::new(),
             inner: handle.inner,
             slot: Mutex::new(None),
@@ -76,6 +77,14 @@ impl Timeout {
             state: Some(state),
             when: at,
         }
+    }
+
+    /// Resets this timeout to an new timeout which will fire at the time
+    /// specified by `dur`.
+    ///
+    /// This is equivalent to calling `reset_at` with `Instant::now() + dur`
+    pub fn reset(&mut self, dur: Duration) {
+        self.reset_at(Instant::now() + dur)
     }
 
     /// Resets this timeout to an new timeout which will fire at the time
@@ -91,13 +100,21 @@ impl Timeout {
     /// Note that if any task is currently blocked on this future then that task
     /// will be dropped. It is required to call `poll` again after this method
     /// has been called to ensure tha ta task is blocked on this future.
-    pub fn reset(&mut self, at: Instant) {
+    pub fn reset_at(&mut self, at: Instant) {
         self.when = at;
         let state = match self.state {
             Some(ref state) => state,
             None => return,
         };
         if let Some(timeouts) = state.inner.upgrade() {
+            let mut bits = state.state.load(SeqCst);
+            loop {
+                let new = bits.wrapping_add(2) & !1;
+                match state.state.compare_exchange(bits, new, SeqCst, SeqCst) {
+                    Ok(_) => break,
+                    Err(s) => bits = s,
+                }
+            }
             *state.at.lock().unwrap() = Some(at);
             timeouts.list.push(state);
             timeouts.task.notify();
@@ -119,7 +136,7 @@ impl Future for Timeout {
             None => return Err(io::Error::new(io::ErrorKind::Other,
                                               "failed to create timer")),
         };
-        if state.ready.load(Ordering::SeqCst) {
+        if state.state.load(SeqCst) & 1 != 0 {
             return Ok(Async::Ready(()))
         }
 
@@ -131,7 +148,7 @@ impl Future for Timeout {
         }
 
         // Need to check after we register as well
-        if state.ready.load(Ordering::SeqCst) {
+        if state.state.load(SeqCst) & 1 != 0 {
             Ok(Async::Ready(()))
         } else {
             Ok(Async::NotReady)

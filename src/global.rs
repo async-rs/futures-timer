@@ -1,7 +1,7 @@
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::Instant;
 
 use futures::Async;
 use futures::sync::oneshot;
@@ -51,7 +51,9 @@ impl Drop for HelperThread {
 fn run(timer: Timer, shutdown: oneshot::Receiver<()>) {
     let mut shutdown = spawn(shutdown);
     let mut timer = spawn(timer);
-    let me = Arc::new(ThreadUnpark::new(thread::current()));
+    let me = Arc::new(ThreadUnpark {
+        thread: thread::current(),
+    });
     loop {
         match shutdown.poll_future_notify(&me, 0) {
             Ok(Async::Ready(_)) | Err(_) => break,
@@ -59,34 +61,30 @@ fn run(timer: Timer, shutdown: oneshot::Receiver<()>) {
         }
         drop(timer.poll_future_notify(&me, 0));
         timer.get_mut().advance();
-        me.park();
+
+        match timer.get_ref().next_event() {
+            // Ok, block for the specified time
+            Some(when) => {
+                let now = Instant::now();
+                if now < when {
+                    thread::park_timeout(when - now)
+                } else {
+                    // .. continue...
+                }
+            }
+
+            // Just wait for one of our futures to wake up
+            None => thread::park(),
+        }
     }
 }
 
 struct ThreadUnpark {
     thread: thread::Thread,
-    ready: AtomicBool,
-}
-
-impl ThreadUnpark {
-    fn new(thread: thread::Thread) -> ThreadUnpark {
-        ThreadUnpark {
-            thread: thread,
-            ready: AtomicBool::new(false),
-        }
-    }
-
-    fn park(&self) {
-        if !self.ready.swap(false, Ordering::SeqCst) {
-            thread::park();
-        }
-    }
 }
 
 impl Notify for ThreadUnpark {
     fn notify(&self, _unpark_id: usize) {
-        self.ready.store(true, Ordering::SeqCst);
         self.thread.unpark()
     }
 }
-
