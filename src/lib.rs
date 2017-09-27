@@ -19,7 +19,7 @@ mod arc_list;
 mod global;
 mod heap;
 
-/// A "timer heap" used to power separately owned instances of `Timeout` and
+/// A "timer heap" used to power separately owned instances of `Sleep` and
 /// `Interval`.
 ///
 /// This timer is implemented as a priority queued-based heap. Each `Timer`
@@ -40,15 +40,15 @@ pub struct Timer {
     timer_heap: Heap<HeapTimer>,
 }
 
-/// A handle to a `Timer` which is used to create instances of a `Timeout`.
+/// A handle to a `Timer` which is used to create instances of a `Sleep`.
 #[derive(Clone)]
 pub struct TimerHandle {
     inner: Weak<Inner>,
 }
 
-mod timeout;
+mod sleep;
 mod interval;
-pub use self::timeout::Timeout;
+pub use self::sleep::Sleep;
 pub use self::interval::Interval;
 
 struct Inner {
@@ -59,7 +59,7 @@ struct Inner {
     task: AtomicTask,
 }
 
-/// Shared state between the `Timer` and a `Timeout`.
+/// Shared state between the `Timer` and a `Sleep`.
 struct ScheduledTimer {
     task: AtomicTask,
 

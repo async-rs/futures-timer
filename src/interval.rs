@@ -3,8 +3,8 @@ use std::io;
 
 use futures::prelude::*;
 
-use {Timeout, TimerHandle};
-use timeout;
+use {Sleep, TimerHandle};
+use sleep;
 
 /// A stream representing notifications at fixed interval
 ///
@@ -12,11 +12,11 @@ use timeout;
 /// `Interval::new_at` methods indicating when a first notification
 /// should be triggered and when it will be repeated.
 ///
-/// Note that timeouts are not intended for high resolution timers, but rather
+/// Note that intervals are not intended for high resolution timers, but rather
 /// they will likely fire some granularity after the exact instant that they're
 /// otherwise indicated to fire at.
 pub struct Interval {
-    timeout: Timeout,
+    sleep: Sleep,
     interval: Duration,
 }
 
@@ -24,9 +24,8 @@ impl Interval {
     /// Creates a new interval which will fire at `dur` time into the future,
     /// and will repeat every `dur` interval after
     ///
-    /// This function will return a future that will resolve to the actual
-    /// interval object. The interval object itself is then a stream which will
-    /// be set to fire at the specified intervals
+    /// The returned object will be bound to the default timer for this thread.
+    /// The default timer will be spun up in a helper thread on first use.
     pub fn new(dur: Duration) -> Interval {
         Interval::new_at(Instant::now() + dur, dur)
     }
@@ -34,12 +33,11 @@ impl Interval {
     /// Creates a new interval which will fire at the time specified by `at`,
     /// and then will repeat every `dur` interval after
     ///
-    /// This function will return a future that will resolve to the actual
-    /// timeout object. The timeout object itself is then a future which will be
-    /// set to fire at the specified point in the future.
+    /// The returned object will be bound to the default timer for this thread.
+    /// The default timer will be spun up in a helper thread on first use.
     pub fn new_at(at: Instant, dur: Duration) -> Interval {
         Interval {
-            timeout: Timeout::new_at(at),
+            sleep: Sleep::new_at(at),
             interval: dur,
         }
     }
@@ -47,12 +45,10 @@ impl Interval {
     /// Creates a new interval which will fire at the time specified by `at`,
     /// and then will repeat every `dur` interval after
     ///
-    /// This function will return a future that will resolve to the actual
-    /// timeout object. The timeout object itself is then a future which will be
-    /// set to fire at the specified point in the future.
+    /// The returned object will be bound to the timer specified by `handle`.
     pub fn new_handle(at: Instant, dur: Duration, handle: TimerHandle) -> Interval {
         Interval {
-            timeout: Timeout::new_handle(at, handle),
+            sleep: Sleep::new_handle(at, handle),
             interval: dur,
         }
     }
@@ -63,13 +59,13 @@ impl Stream for Interval {
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<()>, io::Error> {
-        if self.timeout.poll()?.is_not_ready() {
+        if self.sleep.poll()?.is_not_ready() {
             return Ok(Async::NotReady)
         }
-        let next = next_interval(timeout::fires_at(&self.timeout),
+        let next = next_interval(sleep::fires_at(&self.sleep),
                                  Instant::now(),
                                  self.interval);
-        self.timeout.reset_at(next);
+        self.sleep.reset_at(next);
         Ok(Async::Ready(Some(())))
     }
 }

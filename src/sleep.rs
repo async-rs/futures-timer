@@ -1,6 +1,6 @@
 //! Support for creating futures that represent timeouts.
 //!
-//! This module contains the `Timeout` type which is a future that will resolve
+//! This module contains the `Sleep` type which is a future that will resolve
 //! at a particular point in the future.
 
 use std::io;
@@ -16,53 +16,51 @@ use arc_list::Node;
 use global;
 use {TimerHandle, ScheduledTimer};
 
-/// A future representing the notification that a timeout has occurred.
+/// A future representing the notification that an elapsed duration has
+/// occurred.
 ///
-/// Timeouts are created through the `Timeout::new` or
-/// `Timeout::new_at` methods indicating when a timeout should fire at.
-/// Note that timeouts are not intended for high resolution timers, but rather
-/// they will likely fire some granularity after the exact instant that they're
-/// otherwise indicated to fire at.
-pub struct Timeout {
+/// This is created through the `Sleep::new` or `Sleep::new_at` methods
+/// indicating when the future should fire at.  Note that these futures are not
+/// intended for high resolution timers, but rather they will likely fire some
+/// granularity after the exact instant that they're otherwise indicated to
+/// fire at.
+pub struct Sleep {
     state: Option<Arc<Node<ScheduledTimer>>>,
     when: Instant,
 }
 
-impl Timeout {
-    /// Creates a new timeout which will fire at `dur` time into the future.
+impl Sleep {
+    /// Creates a new future which will fire at `dur` time into the future.
     ///
-    /// This function will return a future that will resolve to the actual
-    /// timeout object. The timeout object itself is then a future which will be
-    /// set to fire at the specified point in the future.
-    pub fn new(dur: Duration) -> Timeout {
+    /// The returned object will be bound to the default timer for this thread.
+    /// The default timer will be spun up in a helper thread on first use.
+    pub fn new(dur: Duration) -> Sleep {
         let when = Instant::now() + dur;
         match global::timer() {
-            Some(h) => Timeout::new_handle(when, h),
-            None => Timeout { state: None, when: when },
+            Some(h) => Sleep::new_handle(when, h),
+            None => Sleep { state: None, when: when },
         }
     }
 
-    /// Creates a new timeout which will fire at the time specified by `at`.
+    /// Creates a new future which will fire at the time specified by `at`.
     ///
-    /// This function will return a future that will resolve to the actual
-    /// timeout object. The timeout object itself is then a future which will be
-    /// set to fire at the specified point in the future.
-    pub fn new_at(at: Instant) -> Timeout {
+    /// The returned object will be bound to the default timer for this thread.
+    /// The default timer will be spun up in a helper thread on first use.
+    pub fn new_at(at: Instant) -> Sleep {
         match global::timer() {
-            Some(h) => Timeout::new_handle(at, h),
-            None => Timeout { state: None, when: at },
+            Some(h) => Sleep::new_handle(at, h),
+            None => Sleep { state: None, when: at },
         }
     }
 
-    /// Creates a new timeout which will fire at the time specified by `at`.
+    /// Creates a new future which will fire at the time specified by `at`.
     ///
-    /// This function will return a future that will resolve to the actual
-    /// timeout object. The timeout object itself is then a future which will be
-    /// set to fire at the specified point in the future.
-    pub fn new_handle(at: Instant, handle: TimerHandle) -> Timeout {
+    /// The returned instance of `Sleep` will be bound to the timer specified by
+    /// the `handle` argument.
+    pub fn new_handle(at: Instant, handle: TimerHandle) -> Sleep {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
-            None => return Timeout { state: None, when: at },
+            None => return Sleep { state: None, when: at },
         };
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
@@ -76,11 +74,11 @@ impl Timeout {
         // timer, meaning that we'll want to immediately return an error from
         // `poll`.
         if inner.list.push(&state).is_err() {
-            return Timeout { state: None, when: at }
+            return Sleep { state: None, when: at }
         }
 
         inner.task.notify();
-        Timeout {
+        Sleep {
             state: Some(state),
             when: at,
         }
@@ -97,7 +95,7 @@ impl Timeout {
     /// Resets this timeout to an new timeout which will fire at the time
     /// specified by `at`.
     ///
-    /// This method is usable even of this instance of `Timeout` has "already
+    /// This method is usable even of this instance of `Sleep` has "already
     /// fired". That is, if this future has resovled, calling this method means
     /// that the future will still re-resolve at the specified instant.
     ///
@@ -143,11 +141,11 @@ impl Timeout {
     }
 }
 
-pub fn fires_at(timeout: &Timeout) -> Instant {
+pub fn fires_at(timeout: &Sleep) -> Instant {
     timeout.when
 }
 
-impl Future for Timeout {
+impl Future for Sleep {
     type Item = ();
     type Error = io::Error;
 
@@ -175,7 +173,7 @@ impl Future for Timeout {
     }
 }
 
-impl Drop for Timeout {
+impl Drop for Sleep {
     fn drop(&mut self) {
         let state = match self.state {
             Some(ref s) => s,
