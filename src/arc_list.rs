@@ -51,8 +51,18 @@ impl<T> ArcList<T> {
     /// Atomically empties this list, returning a new owned copy which can be
     /// used to iterate over the entries.
     pub fn take(&self) -> ArcList<T> {
+        let mut list = self.list.load(SeqCst);
+        loop {
+            if list == 1 {
+                break
+            }
+            match self.list.compare_exchange(list, 0, SeqCst, SeqCst) {
+                Ok(_) => break,
+                Err(l) => list = l,
+            }
+        }
         ArcList {
-            list: AtomicUsize::new(self.list.swap(0, SeqCst)),
+            list: AtomicUsize::new(list),
             _marker: marker::PhantomData,
         }
     }
@@ -61,7 +71,7 @@ impl<T> ArcList<T> {
     /// `push`.
     pub fn take_and_seal(&self) -> ArcList<T> {
         ArcList {
-            list: AtomicUsize::new(self.list.swap(0, SeqCst)),
+            list: AtomicUsize::new(self.list.swap(1, SeqCst)),
             _marker: marker::PhantomData,
         }
     }
@@ -70,7 +80,7 @@ impl<T> ArcList<T> {
     /// empty list.
     pub fn pop(&mut self) -> Option<Arc<Node<T>>> {
         let head = *self.list.get_mut();
-        if head == 0 {
+        if head == 0 || head == 1 {
             return None
         }
         let head = unsafe { Arc::from_raw(head as *const Node<T>) };
@@ -111,5 +121,33 @@ impl<T> Deref for Node<T> {
 
     fn deref(&self) -> &T {
         &self.data
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smoke() {
+        let a = ArcList::new();
+        let n = Arc::new(Node::new(1));
+        assert!(a.push(&n).is_ok());
+
+        let mut l = a.take();
+        assert_eq!(**l.pop().unwrap(), 1);
+        assert!(l.pop().is_none());
+    }
+
+    #[test]
+    fn seal() {
+        let a = ArcList::new();
+        let n = Arc::new(Node::new(1));
+        let mut l = a.take_and_seal();
+        assert!(l.pop().is_none());
+        assert!(a.push(&n).is_err());
+
+        assert!(a.take().pop().is_none());
+        assert!(a.take_and_seal().pop().is_none());
     }
 }
