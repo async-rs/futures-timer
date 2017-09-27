@@ -50,3 +50,19 @@ fn reset() {
     future::poll_fn(|| d.poll()).wait().unwrap();
     assert!(i.elapsed() > dur);
 }
+
+#[test]
+fn drop_timer_wakes() {
+    let t = Timer::new();
+    let handle = t.handle();
+    let mut timeout = Timeout::new_handle(far_future(), handle);
+    let mut t = Some(t);
+    assert!(future::poll_fn(|| {
+        match timeout.poll() {
+            Ok(Async::NotReady) => {}
+            other => return other,
+        }
+        drop(t.take());
+        Ok(Async::NotReady)
+    }).wait().is_err());
+}

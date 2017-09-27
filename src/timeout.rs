@@ -71,7 +71,14 @@ impl Timeout {
             inner: handle.inner,
             slot: Mutex::new(None),
         }));
-        inner.list.push(&state);
+
+        // If we fail to actually push our node then we've become an inert
+        // timer, meaning that we'll want to immediately return an error from
+        // `poll`.
+        if inner.list.push(&state).is_err() {
+            return Timeout { state: None, when: at }
+        }
+
         inner.task.notify();
         Timeout {
             state: Some(state),
@@ -102,23 +109,37 @@ impl Timeout {
     /// has been called to ensure tha ta task is blocked on this future.
     pub fn reset_at(&mut self, at: Instant) {
         self.when = at;
+        if self._reset(at).is_err() {
+            self.state = None
+        }
+    }
+
+    fn _reset(&mut self, at: Instant) -> Result<(), ()> {
         let state = match self.state {
             Some(ref state) => state,
-            None => return,
+            None => return Err(()),
         };
         if let Some(timeouts) = state.inner.upgrade() {
             let mut bits = state.state.load(SeqCst);
             loop {
-                let new = bits.wrapping_add(2) & !1;
+                // If we've been invalidated, cancel this reset
+                if bits & 0b10 != 0 {
+                    return Err(())
+                }
+                let new = bits.wrapping_add(0b100) & !0b11;
                 match state.state.compare_exchange(bits, new, SeqCst, SeqCst) {
                     Ok(_) => break,
                     Err(s) => bits = s,
                 }
             }
             *state.at.lock().unwrap() = Some(at);
-            timeouts.list.push(state);
+            // If we fail to push our node then we've become an inert timer, so
+            // we'll want to clear our `state` field accordingly
+            timeouts.list.push(state)?;
             timeouts.task.notify();
         }
+
+        Ok(())
     }
 }
 
@@ -134,7 +155,7 @@ impl Future for Timeout {
         let state = match self.state {
             Some(ref state) => state,
             None => return Err(io::Error::new(io::ErrorKind::Other,
-                                              "failed to create timer")),
+                                              "timer has gone away")),
         };
         if state.state.load(SeqCst) & 1 != 0 {
             return Ok(Async::Ready(()))
@@ -142,16 +163,14 @@ impl Future for Timeout {
 
         state.task.register();
 
-        if state.inner.upgrade().is_none() {
-            return Err(io::Error::new(io::ErrorKind::Other,
-                                      "timer has gone away"))
-        }
-
-        // Need to check after we register as well
-        if state.state.load(SeqCst) & 1 != 0 {
-            Ok(Async::Ready(()))
-        } else {
-            Ok(Async::NotReady)
+        // Now that we've registered, do the full check of our own internal
+        // state. If we've fired the first bit is set, and if we've been
+        // invalidated the second bit is set.
+        match state.state.load(SeqCst) {
+            n if n & 0b01 != 0 => Ok(Async::Ready(())),
+            n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other,
+                                                     "timer has gone away")),
+            _ => Ok(Async::NotReady),
         }
     }
 }
@@ -164,8 +183,9 @@ impl Drop for Timeout {
         };
         if let Some(timeouts) = state.inner.upgrade() {
             *state.at.lock().unwrap() = None;
-            timeouts.list.push(state);
-            timeouts.task.notify();
+            if timeouts.list.push(state).is_ok() {
+                timeouts.task.notify();
+            }
         }
     }
 }

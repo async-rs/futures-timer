@@ -24,16 +24,25 @@ impl<T> ArcList<T> {
     ///
     /// If `data` is already enqueued in this list then this is a noop,
     /// otherwise, the `data` here is pushed on the end of the list.
-    pub fn push(&self, data: &Arc<Node<T>>) {
+    pub fn push(&self, data: &Arc<Node<T>>) -> Result<(), ()> {
         if data.enqueued.swap(true, SeqCst) {
-            return
+            // note that even if our list is sealed off then the other end is
+            // still guaranteed to see us because we were previously enqueued.
+            return Ok(())
         }
         let mut head = self.list.load(SeqCst);
         let node = Arc::into_raw(data.clone()) as usize;
         loop {
+            // If we've been sealed off, abort and return an error
+            if head == 1 {
+                unsafe { drop(Arc::from_raw(node as *mut Node<T>)); }
+                return Err(())
+            }
+
+            // Otherwise attempt to push this node
             data.next.store(head, SeqCst);
             match self.list.compare_exchange(head, node, SeqCst, SeqCst) {
-                Ok(_) => break,
+                Ok(_) => break Ok(()),
                 Err(new_head) => head = new_head,
             }
         }
@@ -42,6 +51,15 @@ impl<T> ArcList<T> {
     /// Atomically empties this list, returning a new owned copy which can be
     /// used to iterate over the entries.
     pub fn take(&self) -> ArcList<T> {
+        ArcList {
+            list: AtomicUsize::new(self.list.swap(0, SeqCst)),
+            _marker: marker::PhantomData,
+        }
+    }
+
+    /// Atomically empties this list and prevents further successful calls to
+    /// `push`.
+    pub fn take_and_seal(&self) -> ArcList<T> {
         ArcList {
             list: AtomicUsize::new(self.list.swap(0, SeqCst)),
             _marker: marker::PhantomData,
@@ -61,6 +79,14 @@ impl<T> ArcList<T> {
         // can enqueue it again and see further changes.
         assert!(head.enqueued.swap(false, SeqCst));
         Some(head)
+    }
+}
+
+impl<T> Drop for ArcList<T> {
+    fn drop(&mut self) {
+        while let Some(_) = self.pop() {
+            // ...
+        }
     }
 }
 

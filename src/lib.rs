@@ -63,9 +63,10 @@ struct Inner {
 struct ScheduledTimer {
     task: AtomicTask,
 
-    // The lowest bit here is whether the timer has fired or not, and all the
-    // other bits are the "generation" of the timer which is reset during the
-    // `reset` function. Only timers for a matching generation are fired.
+    // The lowest bit here is whether the timer has fired or not, the second
+    // lowest bit is whether the timer has been invalidated, and all the other
+    // bits are the "generation" of the timer which is reset during the `reset`
+    // function. Only timers for a matching generation are fired.
     state: AtomicUsize,
 
     inner: Weak<Inner>,
@@ -134,8 +135,8 @@ impl Timer {
             // blocked.
             let heap_timer = self.timer_heap.pop().unwrap();
             *heap_timer.node.slot.lock().unwrap() = None;
-            let bits = heap_timer.gen << 1;
-            match heap_timer.node.state.compare_exchange(bits, bits | 1, SeqCst, SeqCst) {
+            let bits = heap_timer.gen << 2;
+            match heap_timer.node.state.compare_exchange(bits, bits | 0b01, SeqCst, SeqCst) {
                 Ok(_) => heap_timer.node.task.notify(),
                 Err(_b) => {}
             }
@@ -150,7 +151,7 @@ impl Timer {
         // TODO: avoid remove + push and instead just do one sift of the heap?
         // In theory we could update it in place and then do the percolation
         // as necessary
-        let gen = node.state.load(SeqCst) >> 1;
+        let gen = node.state.load(SeqCst) >> 2;
         let mut slot = node.slot.lock().unwrap();
         if let Some(heap_slot) = slot.take() {
             self.timer_heap.remove(heap_slot);
@@ -172,6 +173,11 @@ impl Timer {
         };
         self.timer_heap.remove(heap_slot);
     }
+
+    fn invalidate(&mut self, node: Arc<Node<ScheduledTimer>>) {
+        node.state.fetch_or(0b10, SeqCst);
+        node.task.notify();
+    }
 }
 
 impl Future for Timer {
@@ -192,10 +198,24 @@ impl Future for Timer {
     }
 }
 
-// impl Drop for Timer {
-//     fn drop(&mut self) {
-//     }
-// }
+impl Drop for Timer {
+    fn drop(&mut self) {
+        // Seal off our list to prevent any more updates from getting pushed on.
+        // Any timer which sees an error from the push will immediately become
+        // inert.
+        let mut list = self.inner.list.take_and_seal();
+
+        // Now that we'll never receive another timer, drain the list of all
+        // updates and also drain our heap of all active timers, invalidating
+        // everything.
+        while let Some(t) = list.pop() {
+            self.invalidate(t);
+        }
+        while let Some(t) = self.timer_heap.pop() {
+            self.invalidate(t.node);
+        }
+    }
+}
 
 impl PartialEq for HeapTimer {
     fn eq(&self, other: &HeapTimer) -> bool {
