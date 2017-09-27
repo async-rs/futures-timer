@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/alexcrichton/futures-timer.svg?branch=master)](https://travis-ci.org/alexcrichton/futures-timer)
 
+[Documentation](http://alexcrichton.com/futures-timer)
+
 A library for working with timers, timeouts, and intervals with the `futures`
 crate.
 
