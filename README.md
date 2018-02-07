@@ -52,6 +52,22 @@ fn main() {
 }
 ```
 
+Or timing out a future
+
+```rust
+extern crate futures_timer;
+
+use std::time::Duration;
+
+use futures_timer::FutureExt;
+
+fn main() {
+    // create a future that will take at most 3 seconds to resolve
+    let future = long_running_future()
+      .timeout(Duration::from_secs(3));
+}
+```
+
 # License
 
 This project is licensed under either of
