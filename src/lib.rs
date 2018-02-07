@@ -1,8 +1,77 @@
+//! A general purpose crate for working with timeouts and delays with futures.
+//!
+//! This crate is intended to provide general purpose timeouts and interval
+//! streams for working with `futures`. The implementation may not be optimized
+//! for your particular use case, though, so be sure to read up on the details
+//! if you're concerned about that!
+//!
+//! Basic usage of this crate is relatively simple:
+//!
+//! ```
+//! # extern crate futures;
+//! # extern crate futures_timer;
+//! # fn main() {
+//! use std::time::Duration;
+//! use futures_timer::Delay;
+//! use futures::prelude::*;
+//!
+//! let dur = Duration::from_secs(3);
+//! let fires_in_three_seconds = Delay::new(dur)
+//!     .map(|()| println!("prints three seconds later"));
+//! // spawn or use the future above
+//! # }
+//! ```
+//!
+//! In addition to a one-shot future you can also create a stream of delayed
+//! notifications with the `Interval` type:
+//!
+//! ```
+//! # extern crate futures;
+//! # extern crate futures_timer;
+//! # fn main() {
+//! use std::time::Duration;
+//! use futures_timer::Interval;
+//! use futures::prelude::*;
+//!
+//! let dur = Duration::from_secs(4);
+//! let stream = Interval::new(dur)
+//!     .map(|()| println!("prints every four seconds"));
+//! // spawn or use the stream
+//! # }
+//! ```
+//!
+//! And you're off to the races! Check out the API documentation for more
+//! details about the various methods on `Delay` and `Interval`.
+//!
+//! # Implementation details
+//!
+//! The `Delay` and `Interval` types are powered by an associated `Timer`. By
+//! default constructors like `Delay::new` and `Interval::new` use a global
+//! instance of `Timer` to power their usage. This global `Timer` is spawned
+//! onto a helper thread which continuously runs in the background sending out
+//! timer notifications.
+//!
+//! If needed, however, a `Timer` can be constructed manually and the
+//! `Delay::new_handle`-style methods can be used to create delays/intervals
+//! associated with a specific instance of `Timer`. Each `Timer` has a
+//! `TimerHandle` type which is used to associate new objects to it.
+//!
+//! Note that there's also a `TimerHandle::set_fallback` method which will
+//! globally configure the fallback timer handle as well if you'd like to run
+//! your own timer.
+//!
+//! Finally, the implementation of `Timer` itself is currently a binary heap.
+//! Timer insertion is O(log n) where n is the number of active timers, and so
+//! is firing a timer (which invovles removing from the heap).
+
+#![deny(missing_docs)]
+
 extern crate futures;
 
 use std::cmp::Ordering;
-use std::sync::atomic::AtomicUsize;
+use std::mem;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
 use std::sync::{Arc, Weak, Mutex};
 use std::time::Instant;
 
@@ -11,9 +80,6 @@ use futures::{Future, Async, Poll};
 
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
-
-#[macro_use]
-mod statik;
 
 mod arc_list;
 mod global;
@@ -35,6 +101,11 @@ mod heap;
 ///   existing ones, or delete existing timeouts. The `Future` implementation
 ///   will never resolve, but it'll schedule notifications of when to wake up
 ///   and process more messages.
+///
+/// Note that if you're using this crate you probably don't need to use a
+/// `Timer` as there is a global one already available for you run on a helper
+/// thread. If this isn't desirable, though, then the
+/// `TimerHandle::set_fallback` method can be used instead!
 pub struct Timer {
     inner: Arc<Inner>,
     timer_heap: Heap<HeapTimer>,
@@ -234,5 +305,102 @@ impl PartialOrd for HeapTimer {
 impl Ord for HeapTimer {
     fn cmp(&self, other: &HeapTimer) -> Ordering {
         self.at.cmp(&other.at)
+    }
+}
+
+static HANDLE_FALLBACK: AtomicUsize = ATOMIC_USIZE_INIT;
+
+/// Error returned from `TimerHandle::set_fallback`.
+#[derive(Clone, Debug)]
+pub struct SetDefaultError(());
+
+impl TimerHandle {
+    /// Configures this timer handle to be the one returned by
+    /// `TimerHandle::default`.
+    ///
+    /// By default a global thread is initialized on the first call to
+    /// `TimerHandle::default`. This first call can happen transitively through
+    /// `Delay::new`. If, however, that hasn't happened yet then the global
+    /// default timer handle can be configured through this method.
+    ///
+    /// This method can be used to prevent the global helper thread from
+    /// spawning. If this method is successful then the global helper thread
+    /// will never get spun up.
+    ///
+    /// On success this timer handle will have installed itself globally to be
+    /// used as the return value for `TimerHandle::default` unless otherwise
+    /// specified.
+    ///
+    /// # Errors
+    ///
+    /// If another thread has already called `set_as_global_fallback` or this
+    /// thread otherwise loses a race to call this method then it will fail
+    /// returning an error. Once a call to `set_as_global_fallback` is
+    /// successful then no future calls may succeed.
+    pub fn set_as_global_fallback(self) -> Result<(), SetDefaultError> {
+        unsafe {
+            let val = self.into_usize();
+            match HANDLE_FALLBACK.compare_exchange(0, val, SeqCst, SeqCst) {
+                Ok(_) => Ok(()),
+                Err(_) => {
+                    drop(TimerHandle::from_usize(val));
+                    Err(SetDefaultError(()))
+                }
+            }
+        }
+    }
+
+    fn into_usize(self) -> usize {
+        unsafe {
+            mem::transmute::<Weak<Inner>, usize>(self.inner)
+        }
+    }
+
+    unsafe fn from_usize(val: usize) -> TimerHandle {
+        let inner = mem::transmute::<usize, Weak<Inner>>(val);;
+        TimerHandle { inner }
+    }
+}
+
+impl Default for TimerHandle {
+    fn default() -> TimerHandle {
+        let mut fallback = HANDLE_FALLBACK.load(SeqCst);
+
+        // If the fallback hasn't been previously initialized then let's spin
+        // up a helper thread and try to initialize with that. If we can't
+        // actually create a helper thread then we'll just return a "defunkt"
+        // handle which will return errors when timer objects are attempted to
+        // be associated.
+        if fallback == 0 {
+            let helper = match global::HelperThread::new() {
+                Ok(helper) => helper,
+                Err(_) => return TimerHandle { inner: Weak::new() },
+            };
+
+            // If we successfully set ourselves as the actual fallback then we
+            // want to `forget` the helper thread to ensure that it persists
+            // globally. If we fail to set ourselves as the fallback that means
+            // that someone was racing with this call to
+            // `TimerHandle::default`.  They ended up winning so we'll destroy
+            // our helper thread (which shuts down the thread) and reload the
+            // fallback.
+            if helper.handle().set_as_global_fallback().is_ok() {
+                let ret = helper.handle();
+                helper.forget();
+                return ret
+            }
+            fallback = HANDLE_FALLBACK.load(SeqCst);
+        }
+
+        // At this point our fallback handle global was configured so we use
+        // its value to reify a handle, clone it, and then forget our reified
+        // handle as we don't actually have an owning reference to it.
+        assert!(fallback != 0);
+        unsafe {
+            let handle = TimerHandle::from_usize(fallback);
+            let ret = handle.clone();
+            drop(handle.into_usize());
+            return ret
+        }
     }
 }

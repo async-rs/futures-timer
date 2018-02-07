@@ -1,68 +1,64 @@
 use std::io;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
 
-use futures::Async;
-use futures::sync::oneshot;
 use futures::executor::{spawn, Notify};
 
 use {TimerHandle, Timer};
 
-struct HelperThread {
+pub struct HelperThread {
     thread: Option<thread::JoinHandle<()>>,
-    tx: Option<oneshot::Sender<()>>,
     timer: TimerHandle,
-}
-
-statik!(static DEFAULT: Option<HelperThread> = HelperThread::new().ok());
-
-pub fn timer() -> Option<TimerHandle> {
-    DEFAULT.with(|h| h.as_ref().map(|c| c.timer.clone())).and_then(|x| x)
-}
-
-#[allow(dead_code)]
-pub fn shutdown() {
-    DEFAULT.drop();
+    done: Arc<AtomicBool>,
 }
 
 impl HelperThread {
-    fn new() -> io::Result<HelperThread> {
-        let (tx, rx) = oneshot::channel();
+    pub fn new() -> io::Result<HelperThread> {
         let timer = Timer::new();
         let timer_handle = timer.handle();
-        let thread = thread::spawn(move || run(timer, rx));
+        let done = Arc::new(AtomicBool::new(false));
+        let done2 = done.clone();
+        let thread = thread::Builder::new().spawn(move || run(timer, done2))?;
 
         Ok(HelperThread {
             thread: Some(thread),
-            tx: Some(tx),
+            done,
             timer: timer_handle,
         })
+    }
+
+    pub fn handle(&self) -> TimerHandle {
+        self.timer.clone()
+    }
+
+    pub fn forget(mut self) {
+        self.thread.take();
     }
 }
 
 impl Drop for HelperThread {
     fn drop(&mut self) {
-        drop(self.tx.take());
-        drop(self.thread.take().unwrap().join());
+        let thread = match self.thread.take() {
+            Some(thread) => thread,
+            None => return,
+        };
+        self.done.store(true, Ordering::SeqCst);
+        thread.thread().unpark();
+        drop(thread.join());
     }
 }
 
-fn run(timer: Timer, shutdown: oneshot::Receiver<()>) {
-    let mut shutdown = spawn(shutdown);
+fn run(timer: Timer, done: Arc<AtomicBool>) {
     let mut timer = spawn(timer);
-    let me = Arc::new(ThreadUnpark {
-        thread: thread::current(),
-    });
-    loop {
-        match shutdown.poll_future_notify(&me, 0) {
-            Ok(Async::Ready(_)) | Err(_) => break,
-            Ok(Async::NotReady) => {}
-        }
+	let me = Arc::new(ThreadUnpark {
+		thread: thread::current(),
+	});
+    while !done.load(Ordering::SeqCst) {
         drop(timer.poll_future_notify(&me, 0));
         timer.get_mut().advance();
-
-        match timer.get_ref().next_event() {
+        match timer.get_mut().next_event() {
             // Ok, block for the specified time
             Some(when) => {
                 let now = Instant::now();

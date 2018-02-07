@@ -13,7 +13,6 @@ use futures::{Future, Poll, Async};
 use futures::task::AtomicTask;
 
 use arc_list::Node;
-use global;
 use {TimerHandle, ScheduledTimer};
 
 /// A future representing the notification that an elapsed duration has
@@ -35,11 +34,7 @@ impl Delay {
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
     pub fn new(dur: Duration) -> Delay {
-        let when = Instant::now() + dur;
-        match global::timer() {
-            Some(h) => Delay::new_handle(when, h),
-            None => Delay { state: None, when: when },
-        }
+        Delay::new_at(Instant::now() + dur)
     }
 
     /// Creates a new future which will fire at the time specified by `at`.
@@ -47,10 +42,7 @@ impl Delay {
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
     pub fn new_at(at: Instant) -> Delay {
-        match global::timer() {
-            Some(h) => Delay::new_handle(at, h),
-            None => Delay { state: None, when: at },
-        }
+        Delay::new_handle(at, Default::default())
     }
 
     /// Creates a new future which will fire at the time specified by `at`.
