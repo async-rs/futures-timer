@@ -3,8 +3,8 @@ use std::io;
 
 use futures::prelude::*;
 
-use {Sleep, TimerHandle};
-use sleep;
+use {Delay, TimerHandle};
+use delay;
 
 /// A stream representing notifications at fixed interval
 ///
@@ -16,7 +16,7 @@ use sleep;
 /// they will likely fire some granularity after the exact instant that they're
 /// otherwise indicated to fire at.
 pub struct Interval {
-    sleep: Sleep,
+    delay: Delay,
     interval: Duration,
 }
 
@@ -37,7 +37,7 @@ impl Interval {
     /// The default timer will be spun up in a helper thread on first use.
     pub fn new_at(at: Instant, dur: Duration) -> Interval {
         Interval {
-            sleep: Sleep::new_at(at),
+            delay: Delay::new_at(at),
             interval: dur,
         }
     }
@@ -48,7 +48,7 @@ impl Interval {
     /// The returned object will be bound to the timer specified by `handle`.
     pub fn new_handle(at: Instant, dur: Duration, handle: TimerHandle) -> Interval {
         Interval {
-            sleep: Sleep::new_handle(at, handle),
+            delay: Delay::new_handle(at, handle),
             interval: dur,
         }
     }
@@ -59,13 +59,13 @@ impl Stream for Interval {
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<()>, io::Error> {
-        if self.sleep.poll()?.is_not_ready() {
+        if self.delay.poll()?.is_not_ready() {
             return Ok(Async::NotReady)
         }
-        let next = next_interval(sleep::fires_at(&self.sleep),
+        let next = next_interval(delay::fires_at(&self.delay),
                                  Instant::now(),
                                  self.interval);
-        self.sleep.reset_at(next);
+        self.delay.reset_at(next);
         Ok(Async::Ready(Some(())))
     }
 }

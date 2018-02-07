@@ -1,6 +1,6 @@
 //! Support for creating futures that represent timeouts.
 //!
-//! This module contains the `Sleep` type which is a future that will resolve
+//! This module contains the `Delay` type which is a future that will resolve
 //! at a particular point in the future.
 
 use std::io;
@@ -19,26 +19,26 @@ use {TimerHandle, ScheduledTimer};
 /// A future representing the notification that an elapsed duration has
 /// occurred.
 ///
-/// This is created through the `Sleep::new` or `Sleep::new_at` methods
+/// This is created through the `Delay::new` or `Delay::new_at` methods
 /// indicating when the future should fire at.  Note that these futures are not
 /// intended for high resolution timers, but rather they will likely fire some
 /// granularity after the exact instant that they're otherwise indicated to
 /// fire at.
-pub struct Sleep {
+pub struct Delay {
     state: Option<Arc<Node<ScheduledTimer>>>,
     when: Instant,
 }
 
-impl Sleep {
+impl Delay {
     /// Creates a new future which will fire at `dur` time into the future.
     ///
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
-    pub fn new(dur: Duration) -> Sleep {
+    pub fn new(dur: Duration) -> Delay {
         let when = Instant::now() + dur;
         match global::timer() {
-            Some(h) => Sleep::new_handle(when, h),
-            None => Sleep { state: None, when: when },
+            Some(h) => Delay::new_handle(when, h),
+            None => Delay { state: None, when: when },
         }
     }
 
@@ -46,21 +46,21 @@ impl Sleep {
     ///
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
-    pub fn new_at(at: Instant) -> Sleep {
+    pub fn new_at(at: Instant) -> Delay {
         match global::timer() {
-            Some(h) => Sleep::new_handle(at, h),
-            None => Sleep { state: None, when: at },
+            Some(h) => Delay::new_handle(at, h),
+            None => Delay { state: None, when: at },
         }
     }
 
     /// Creates a new future which will fire at the time specified by `at`.
     ///
-    /// The returned instance of `Sleep` will be bound to the timer specified by
+    /// The returned instance of `Delay` will be bound to the timer specified by
     /// the `handle` argument.
-    pub fn new_handle(at: Instant, handle: TimerHandle) -> Sleep {
+    pub fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
-            None => return Sleep { state: None, when: at },
+            None => return Delay { state: None, when: at },
         };
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
@@ -74,11 +74,11 @@ impl Sleep {
         // timer, meaning that we'll want to immediately return an error from
         // `poll`.
         if inner.list.push(&state).is_err() {
-            return Sleep { state: None, when: at }
+            return Delay { state: None, when: at }
         }
 
         inner.task.notify();
-        Sleep {
+        Delay {
             state: Some(state),
             when: at,
         }
@@ -95,7 +95,7 @@ impl Sleep {
     /// Resets this timeout to an new timeout which will fire at the time
     /// specified by `at`.
     ///
-    /// This method is usable even of this instance of `Sleep` has "already
+    /// This method is usable even of this instance of `Delay` has "already
     /// fired". That is, if this future has resovled, calling this method means
     /// that the future will still re-resolve at the specified instant.
     ///
@@ -141,11 +141,11 @@ impl Sleep {
     }
 }
 
-pub fn fires_at(timeout: &Sleep) -> Instant {
+pub fn fires_at(timeout: &Delay) -> Instant {
     timeout.when
 }
 
-impl Future for Sleep {
+impl Future for Delay {
     type Item = ();
     type Error = io::Error;
 
@@ -173,7 +173,7 @@ impl Future for Sleep {
     }
 }
 
-impl Drop for Sleep {
+impl Drop for Delay {
     fn drop(&mut self) {
         let state = match self.state {
             Some(ref s) => s,
