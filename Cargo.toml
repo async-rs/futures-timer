@@ -12,4 +12,4 @@ Timeouts and intervals for futures.
 """
 
 [dependencies]
-futures = "0.1"
+futures = "0.1.15"
