@@ -30,6 +30,7 @@ pub trait FutureExt: Future + Sized {
     ///
     /// use std::time::Duration;
     /// use futures::prelude::*;
+    /// use futures::executor::block_on;
     /// use futures_timer::FutureExt;
     ///
     /// # fn long_future() -> futures::future::FutureResult<(), std::io::Error> {
@@ -40,7 +41,7 @@ pub trait FutureExt: Future + Sized {
     ///     let future = long_future();
     ///     let timed_out = future.timeout(Duration::from_secs(1));
     ///
-    ///     match timed_out.wait() {
+    ///     match block_on(timed_out) {
     ///         Ok(item) => println!("got {:?} within enough time!", item),
     ///         Err(_) => println!("took too long to produce the item"),
     ///     }
@@ -86,16 +87,16 @@ impl<F> Future for Timeout<F>
     type Item = F::Item;
     type Error = F::Error;
 
-    fn poll(&mut self) -> Poll<F::Item, F::Error> {
-        match self.future.poll()? {
-            Async::NotReady => {}
+    fn poll(&mut self, cx: &mut task::Context) -> Poll<F::Item, F::Error> {
+        match self.future.poll(cx)? {
+            Async::Pending => {}
             other => return Ok(other)
         }
 
-        if self.timeout.poll()?.is_ready() {
+        if self.timeout.poll(cx)?.is_ready() {
             Err(io::Error::new(io::ErrorKind::TimedOut, "future timed out").into())
         } else {
-            Ok(Async::NotReady)
+            Ok(Async::Pending)
         }
     }
 }
@@ -142,20 +143,20 @@ impl<S> Stream for TimeoutStream<S>
     type Item = S::Item;
     type Error = S::Error;
 
-    fn poll(&mut self) -> Poll<Option<S::Item>, S::Error> {
-        match self.stream.poll() {
-            Ok(Async::NotReady) => {}
+    fn poll_next(&mut self, cx: &mut task::Context) -> Poll<Option<S::Item>, S::Error> {
+        match self.stream.poll_next(cx) {
+            Ok(Async::Pending) => {}
             other => {
                 self.timeout.reset(self.dur);
                 return other
             }
         }
 
-        if self.timeout.poll()?.is_ready() {
+        if self.timeout.poll(cx)?.is_ready() {
             self.timeout.reset(self.dur);
             Err(io::Error::new(io::ErrorKind::TimedOut, "stream item timed out").into())
         } else {
-            Ok(Async::NotReady)
+            Ok(Async::Pending)
         }
     }
 }

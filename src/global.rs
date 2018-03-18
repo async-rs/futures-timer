@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
 
-use futures::executor::{spawn, Notify};
+use futures::prelude::*;
+use futures::executor::{SpawnError, Executor};
 
 use {TimerHandle, Timer};
 
@@ -50,15 +51,18 @@ impl Drop for HelperThread {
     }
 }
 
-fn run(timer: Timer, done: Arc<AtomicBool>) {
-    let mut timer = spawn(timer);
+fn run(mut timer: Timer, done: Arc<AtomicBool>) {
 	let me = Arc::new(ThreadUnpark {
 		thread: thread::current(),
 	});
+    let mut local_map = task::LocalMap::new();
+    let waker = task::Waker::from(me);
+    let mut exec = NonFunctionalExecutor;
+    let mut cx = task::Context::new(&mut local_map, &waker, &mut exec);
     while !done.load(Ordering::SeqCst) {
-        drop(timer.poll_future_notify(&me, 0));
-        timer.get_mut().advance();
-        match timer.get_mut().next_event() {
+        drop(timer.poll(&mut cx));
+        timer.advance();
+        match timer.next_event() {
             // Ok, block for the specified time
             Some(when) => {
                 let now = Instant::now();
@@ -79,8 +83,16 @@ struct ThreadUnpark {
     thread: thread::Thread,
 }
 
-impl Notify for ThreadUnpark {
-    fn notify(&self, _unpark_id: usize) {
-        self.thread.unpark()
+impl task::Wake for ThreadUnpark {
+    fn wake(arc_self: &Arc<Self>) {
+        arc_self.thread.unpark()
+    }
+}
+
+struct NonFunctionalExecutor;
+
+impl Executor for NonFunctionalExecutor {
+    fn spawn(&mut self, _: Box<Future<Item = (), Error = Never> + 'static + Send>) -> Result<(), SpawnError> {
+        Err(SpawnError::shutdown())
     }
 }
