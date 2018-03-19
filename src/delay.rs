@@ -10,7 +10,7 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::time::{Duration, Instant};
 
 use futures::{Future, Poll, Async};
-use futures::task::AtomicTask;
+use futures::task::{self, AtomicWaker};
 
 use arc_list::Node;
 use {TimerHandle, ScheduledTimer};
@@ -57,7 +57,7 @@ impl Delay {
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
             state: AtomicUsize::new(0),
-            task: AtomicTask::new(),
+            waker: AtomicWaker::new(),
             inner: handle.inner,
             slot: Mutex::new(None),
         }));
@@ -69,7 +69,7 @@ impl Delay {
             return Delay { state: None, when: at }
         }
 
-        inner.task.notify();
+        inner.waker.wake();
         Delay {
             state: Some(state),
             when: at,
@@ -126,7 +126,7 @@ impl Delay {
             // If we fail to push our node then we've become an inert timer, so
             // we'll want to clear our `state` field accordingly
             timeouts.list.push(state)?;
-            timeouts.task.notify();
+            timeouts.waker.wake();
         }
 
         Ok(())
@@ -141,7 +141,7 @@ impl Future for Delay {
     type Item = ();
     type Error = io::Error;
 
-    fn poll(&mut self) -> Poll<(), io::Error> {
+    fn poll(&mut self, cx: &mut task::Context) -> Poll<(), io::Error> {
         let state = match self.state {
             Some(ref state) => state,
             None => return Err(io::Error::new(io::ErrorKind::Other,
@@ -151,7 +151,7 @@ impl Future for Delay {
             return Ok(Async::Ready(()))
         }
 
-        state.task.register();
+        state.waker.register(cx.waker());
 
         // Now that we've registered, do the full check of our own internal
         // state. If we've fired the first bit is set, and if we've been
@@ -160,7 +160,7 @@ impl Future for Delay {
             n if n & 0b01 != 0 => Ok(Async::Ready(())),
             n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other,
                                                      "timer has gone away")),
-            _ => Ok(Async::NotReady),
+            _ => Ok(Async::Pending),
         }
     }
 }
@@ -174,7 +174,7 @@ impl Drop for Delay {
         if let Some(timeouts) = state.inner.upgrade() {
             *state.at.lock().unwrap() = None;
             if timeouts.list.push(state).is_ok() {
-                timeouts.task.notify();
+                timeouts.waker.wake();
             }
         }
     }
