@@ -8,12 +8,13 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::time::{Duration, Instant};
+use std::pin::Pin;
 
-use futures::{Future, Poll, Async};
+use futures::{Future, Poll};
 use futures::task::{self, AtomicWaker};
 
-use arc_list::Node;
-use {TimerHandle, ScheduledTimer};
+use crate::arc_list::Node;
+use crate::{TimerHandle, ScheduledTimer};
 
 /// A future representing the notification that an elapsed duration has
 /// occurred.
@@ -138,29 +139,28 @@ pub fn fires_at(timeout: &Delay) -> Instant {
 }
 
 impl Future for Delay {
-    type Item = ();
-    type Error = io::Error;
+    type Output = Result<(), io::Error>;
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<(), io::Error> {
+    fn poll(self: Pin<&mut Self>, lw: &task::LocalWaker) -> Poll<Self::Output> {
         let state = match self.state {
             Some(ref state) => state,
-            None => return Err(io::Error::new(io::ErrorKind::Other,
-                                              "timer has gone away")),
+            None => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other,
+                                              "timer has gone away"))),
         };
         if state.state.load(SeqCst) & 1 != 0 {
-            return Ok(Async::Ready(()))
+            return Poll::Ready(Ok(()))
         }
 
-        state.waker.register(cx.waker());
+        state.waker.register(lw);
 
         // Now that we've registered, do the full check of our own internal
         // state. If we've fired the first bit is set, and if we've been
         // invalidated the second bit is set.
         match state.state.load(SeqCst) {
-            n if n & 0b01 != 0 => Ok(Async::Ready(())),
-            n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other,
-                                                     "timer has gone away")),
-            _ => Ok(Async::Pending),
+            n if n & 0b01 != 0 => Poll::Ready(Ok(())),
+            n if n & 0b10 != 0 => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other,
+                                                     "timer has gone away"))),
+            _ => Poll::Pending,
         }
     }
 }

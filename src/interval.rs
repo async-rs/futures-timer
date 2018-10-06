@@ -1,10 +1,12 @@
 use std::time::{Duration, Instant};
 use std::io;
+use std::pin::Pin;
 
 use futures::prelude::*;
+use futures::{Poll, task};
 
-use {Delay, TimerHandle};
-use delay;
+use crate::{Delay, TimerHandle};
+use crate::delay;
 
 /// A stream representing notifications at fixed interval
 ///
@@ -55,18 +57,18 @@ impl Interval {
 }
 
 impl Stream for Interval {
-    type Item = ();
-    type Error = io::Error;
+    type Item = Result<(), io::Error>;
 
-    fn poll_next(&mut self, cx: &mut task::Context) -> Poll<Option<()>, io::Error> {
-        if self.delay.poll(cx)?.is_pending() {
-            return Ok(Async::Pending)
+    fn poll_next(mut self: Pin<&mut Self>, lw: &task::LocalWaker) -> Poll<Option<Result<(), io::Error>>> {
+        let delay = Pin::new(&mut self.delay);
+        if Future::poll(delay, lw)?.is_pending() {
+            return Poll::Pending
         }
         let next = next_interval(delay::fires_at(&self.delay),
                                  Instant::now(),
                                  self.interval);
         self.delay.reset_at(next);
-        Ok(Async::Ready(Some(())))
+        Poll::Ready(Some(Ok(())))
     }
 }
 

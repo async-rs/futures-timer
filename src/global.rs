@@ -3,11 +3,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
+use std::pin::Pin;
 
 use futures::prelude::*;
-use futures::executor::{SpawnError, Executor};
+use futures::task;
 
-use {TimerHandle, Timer};
+use crate::{TimerHandle, Timer};
 
 pub struct HelperThread {
     thread: Option<thread::JoinHandle<()>>,
@@ -52,15 +53,13 @@ impl Drop for HelperThread {
 }
 
 fn run(mut timer: Timer, done: Arc<AtomicBool>) {
-	let me = Arc::new(ThreadUnpark {
-		thread: thread::current(),
-	});
-    let mut local_map = task::LocalMap::new();
-    let waker = task::Waker::from(me);
-    let mut exec = NonFunctionalExecutor;
-    let mut cx = task::Context::new(&mut local_map, &waker, &mut exec);
+    let mut timer = Pin::new(&mut timer);
+    let me = Arc::new(ThreadUnpark {
+        thread: thread::current(),
+    });
+    let lw = unsafe { task::local_waker(me) };
     while !done.load(Ordering::SeqCst) {
-        drop(timer.poll(&mut cx));
+        drop(Timer::poll(timer.as_mut(), &lw));
         timer.advance();
         match timer.next_event() {
             // Ok, block for the specified time
@@ -89,10 +88,3 @@ impl task::Wake for ThreadUnpark {
     }
 }
 
-struct NonFunctionalExecutor;
-
-impl Executor for NonFunctionalExecutor {
-    fn spawn(&mut self, _: Box<Future<Item = (), Error = Never> + 'static + Send>) -> Result<(), SpawnError> {
-        Err(SpawnError::shutdown())
-    }
-}

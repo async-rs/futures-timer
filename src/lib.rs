@@ -17,7 +17,7 @@
 //!
 //! let dur = Duration::from_secs(3);
 //! let fires_in_three_seconds = Delay::new(dur)
-//!     .map(|()| println!("prints three seconds later"));
+//!     .map(|_| println!("prints three seconds later"));
 //! // spawn or use the future above
 //! # }
 //! ```
@@ -35,7 +35,7 @@
 //!
 //! let dur = Duration::from_secs(4);
 //! let stream = Interval::new(dur)
-//!     .map(|()| println!("prints every four seconds"));
+//!     .map(|_| println!("prints every four seconds"));
 //! // spawn or use the stream
 //! # }
 //! ```
@@ -64,6 +64,7 @@
 //! Timer insertion is O(log n) where n is the number of active timers, and so
 //! is firing a timer (which invovles removing from the heap).
 
+#![feature(futures_api, pin, arbitrary_self_types, try_trait)]
 #![deny(missing_docs)]
 
 extern crate futures;
@@ -74,18 +75,19 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
 use std::sync::{Arc, Weak, Mutex};
 use std::time::Instant;
+use std::pin::Pin;
 
 use futures::task::AtomicWaker;
-use futures::{Future, Async, Poll, task};
+use futures::{Future, Poll, task};
 
-use arc_list::{ArcList, Node};
-use heap::{Heap, Slot};
+use self::arc_list::{ArcList, Node};
+use self::heap::{Heap, Slot};
 
 mod arc_list;
 mod global;
 mod heap;
 pub mod ext;
-pub use ext::{FutureExt, StreamExt};
+pub use self::ext::{FutureExt, StreamExt};
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
 /// `Interval`.
@@ -254,11 +256,10 @@ impl Timer {
 }
 
 impl Future for Timer {
-    type Item = ();
-    type Error = ();
+    type Output = ();
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<(), ()> {
-        self.inner.waker.register(cx.waker());
+    fn poll(mut self: Pin<&mut Self>, lw: &task::LocalWaker) -> Poll<Self::Output> {
+        self.inner.waker.register(lw);
         let mut list = self.inner.list.take();
         while let Some(node) = list.pop() {
             let at = *node.at.lock().unwrap();
@@ -267,7 +268,7 @@ impl Future for Timer {
                 None => self.remove(node),
             }
         }
-        Ok(Async::Pending)
+        Poll::Pending
     }
 }
 

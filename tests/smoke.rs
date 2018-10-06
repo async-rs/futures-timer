@@ -1,9 +1,12 @@
+#![feature(futures_api, pin)]
+
 extern crate futures;
 extern crate futures_timer;
 
 use std::time::{Instant, Duration};
+use std::pin::Pin;
 
-use futures::future;
+use futures::{future, Poll};
 use futures::prelude::*;
 use futures::executor::block_on;
 use futures_timer::{Timer, Delay};
@@ -43,12 +46,13 @@ fn reset() {
     let i = Instant::now();
     let dur = Duration::from_millis(100);
     let mut d = Delay::new(dur);
-    block_on(future::poll_fn(|cx| d.poll(cx))).unwrap();
+    let mut d = Pin::new(&mut d);
+    block_on(future::poll_fn(|lw| Future::poll(d.as_mut(), lw))).unwrap();
     assert!(i.elapsed() > dur);
 
     let i = Instant::now();
     d.reset(dur);
-    block_on(future::poll_fn(|cx| d.poll(cx))).unwrap();
+    block_on(future::poll_fn(|lw| Future::poll(d.as_mut(), lw))).unwrap();
     assert!(i.elapsed() > dur);
 }
 
@@ -58,12 +62,13 @@ fn drop_timer_wakes() {
     let handle = t.handle();
     let mut timeout = Delay::new_handle(far_future(), handle);
     let mut t = Some(t);
-    assert!(block_on(future::poll_fn(|cx| {
-        match timeout.poll(cx) {
-            Ok(Async::Pending) => {}
+    assert!(block_on(future::poll_fn(|lw| {
+        let timeout = Pin::new(&mut timeout);
+        match Future::poll(timeout, lw) {
+            Poll::Pending => {}
             other => return other,
         }
         drop(t.take());
-        Ok(Async::Pending)
+        Poll::Pending
     })).is_err());
 }
