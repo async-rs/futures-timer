@@ -2,6 +2,7 @@
 
 extern crate futures;
 extern crate futures_timer;
+#[macro_use] extern crate pin_utils;
 
 use std::time::{Instant, Duration};
 use std::pin::Pin;
@@ -46,13 +47,13 @@ fn reset() {
     let i = Instant::now();
     let dur = Duration::from_millis(100);
     let mut d = Delay::new(dur);
-    let mut d = Pin::new(&mut d);
-    block_on(future::poll_fn(|lw| Future::poll(d.as_mut(), lw))).unwrap();
+    pin_mut!(d);
+    block_on(future::poll_fn(|lw| d.as_mut().poll(lw))).unwrap();
     assert!(i.elapsed() > dur);
 
     let i = Instant::now();
     d.reset(dur);
-    block_on(future::poll_fn(|lw| Future::poll(d.as_mut(), lw))).unwrap();
+    block_on(future::poll_fn(|lw| d.as_mut().poll(lw))).unwrap();
     assert!(i.elapsed() > dur);
 }
 
@@ -60,11 +61,11 @@ fn reset() {
 fn drop_timer_wakes() {
     let t = Timer::new();
     let handle = t.handle();
-    let mut timeout = Delay::new_handle(far_future(), handle);
+    let timeout = Delay::new_handle(far_future(), handle);
+    pin_mut!(timeout);
     let mut t = Some(t);
     assert!(block_on(future::poll_fn(|lw| {
-        let timeout = Pin::new(&mut timeout);
-        match Future::poll(timeout, lw) {
+        match timeout.as_mut().poll(lw) {
             Poll::Pending => {}
             other => return other,
         }

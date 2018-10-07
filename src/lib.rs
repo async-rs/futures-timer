@@ -66,8 +66,10 @@
 
 #![feature(futures_api, pin, arbitrary_self_types, try_trait)]
 #![deny(missing_docs)]
+#![feature(core_intrinsics)]
 
 extern crate futures;
+#[macro_use] extern crate pin_utils;
 
 use std::cmp::Ordering;
 use std::mem;

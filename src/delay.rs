@@ -144,11 +144,11 @@ impl Future for Delay {
     fn poll(self: Pin<&mut Self>, lw: &task::LocalWaker) -> Poll<Self::Output> {
         let state = match self.state {
             Some(ref state) => state,
-            None => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other,
-                                              "timer has gone away"))),
+            None => return Err(io::Error::new(io::ErrorKind::Other,
+                                              "timer has gone away")).into(),
         };
         if state.state.load(SeqCst) & 1 != 0 {
-            return Poll::Ready(Ok(()))
+            return Ok(()).into()
         }
 
         state.waker.register(lw);
@@ -157,9 +157,9 @@ impl Future for Delay {
         // state. If we've fired the first bit is set, and if we've been
         // invalidated the second bit is set.
         match state.state.load(SeqCst) {
-            n if n & 0b01 != 0 => Poll::Ready(Ok(())),
-            n if n & 0b10 != 0 => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other,
-                                                     "timer has gone away"))),
+            n if n & 0b01 != 0 => Ok(()).into(),
+            n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other,
+                                                     "timer has gone away")).into(),
             _ => Poll::Pending,
         }
     }

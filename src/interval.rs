@@ -23,6 +23,8 @@ pub struct Interval {
 }
 
 impl Interval {
+    unsafe_pinned!(delay: Delay);
+
     /// Creates a new interval which will fire at `dur` time into the future,
     /// and will repeat every `dur` interval after
     ///
@@ -60,15 +62,14 @@ impl Stream for Interval {
     type Item = Result<(), io::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, lw: &task::LocalWaker) -> Poll<Option<Result<(), io::Error>>> {
-        let delay = Pin::new(&mut self.delay);
-        if Future::poll(delay, lw)?.is_pending() {
+        if self.delay().poll(lw)?.is_pending() {
             return Poll::Pending
         }
         let next = next_interval(delay::fires_at(&self.delay),
                                  Instant::now(),
                                  self.interval);
         self.delay.reset_at(next);
-        Poll::Ready(Some(Ok(())))
+        Some(Ok(())).into()
     }
 }
 

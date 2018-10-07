@@ -14,3 +14,4 @@ Timeouts and intervals for futures.
 
 [dependencies]
 futures-preview = "0.3.0-alpha.7"
+pin-utils = "0.1.0-alpha.3"

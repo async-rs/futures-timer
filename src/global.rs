@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
-use std::pin::Pin;
 
 use futures::prelude::*;
 use futures::task;
@@ -52,14 +51,14 @@ impl Drop for HelperThread {
     }
 }
 
-fn run(mut timer: Timer, done: Arc<AtomicBool>) {
-    let mut timer = Pin::new(&mut timer);
+fn run(timer: Timer, done: Arc<AtomicBool>) {
+    pin_mut!(timer);
     let me = Arc::new(ThreadUnpark {
         thread: thread::current(),
     });
     let lw = unsafe { task::local_waker(me) };
     while !done.load(Ordering::SeqCst) {
-        drop(Timer::poll(timer.as_mut(), &lw));
+        drop(timer.as_mut().poll(&lw));
         timer.advance();
         match timer.next_event() {
             // Ok, block for the specified time
