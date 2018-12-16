@@ -75,8 +75,8 @@ use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
 use std::sync::{Arc, Weak, Mutex};
 use std::time::Instant;
 
-use futures::task::AtomicWaker;
-use futures::{Future, Async, Poll, task};
+use futures::task::AtomicTask;
+use futures::{Future, Async, Poll};
 
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
@@ -129,12 +129,12 @@ struct Inner {
     list: ArcList<ScheduledTimer>,
 
     /// The blocked `Timer` task to receive notifications to the `list` above.
-    waker: AtomicWaker,
+    task: AtomicTask,
 }
 
 /// Shared state between the `Timer` and a `Delay`.
 struct ScheduledTimer {
-    waker: AtomicWaker,
+    task: AtomicTask,
 
     // The lowest bit here is whether the timer has fired or not, the second
     // lowest bit is whether the timer has been invalidated, and all the other
@@ -164,7 +164,7 @@ impl Timer {
         Timer {
             inner: Arc::new(Inner {
                 list: ArcList::new(),
-                waker: AtomicWaker::new(),
+                task: AtomicTask::new(),
             }),
             timer_heap: Heap::new(),
         }
@@ -210,7 +210,7 @@ impl Timer {
             *heap_timer.node.slot.lock().unwrap() = None;
             let bits = heap_timer.gen << 2;
             match heap_timer.node.state.compare_exchange(bits, bits | 0b01, SeqCst, SeqCst) {
-                Ok(_) => heap_timer.node.waker.wake(),
+                Ok(_) => heap_timer.node.task.notify(),
                 Err(_b) => {}
             }
         }
@@ -249,7 +249,7 @@ impl Timer {
 
     fn invalidate(&mut self, node: Arc<Node<ScheduledTimer>>) {
         node.state.fetch_or(0b10, SeqCst);
-        node.waker.wake();
+        node.task.notify();
     }
 }
 
@@ -257,8 +257,8 @@ impl Future for Timer {
     type Item = ();
     type Error = ();
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<(), ()> {
-        self.inner.waker.register(cx.waker());
+    fn poll(&mut self) -> Poll<(), ()> {
+        self.inner.task.register();
         let mut list = self.inner.list.take();
         while let Some(node) = list.pop() {
             let at = *node.at.lock().unwrap();
@@ -267,7 +267,7 @@ impl Future for Timer {
                 None => self.remove(node),
             }
         }
-        Ok(Async::Pending)
+        Ok(Async::NotReady)
     }
 }
 
