@@ -9,6 +9,12 @@ use futures::executor::{SpawnError, Executor};
 
 use {TimerHandle, Timer};
 
+/// A thread which drives execution of a `Timer`.
+///
+/// Note that if you're using this crate you probably don't need to use this
+/// type, as there is a global `HelperThread` started in the background for you
+/// by default. This type is available in case you need more close control over
+/// when/how threads are spawned.
 pub struct HelperThread {
     thread: Option<thread::JoinHandle<()>>,
     timer: TimerHandle,
@@ -16,6 +22,7 @@ pub struct HelperThread {
 }
 
 impl HelperThread {
+    /// Creates a new HelperThread, and associated Timer whose execution it drives.
     pub fn new() -> io::Result<HelperThread> {
         let timer = Timer::new();
         let timer_handle = timer.handle();
@@ -30,10 +37,12 @@ impl HelperThread {
         })
     }
 
+    /// Returns a handle to the Timer drive by this thread.
     pub fn handle(&self) -> TimerHandle {
         self.timer.clone()
     }
 
+    /// Ensures that the thread persists even if the `HelperThread` goes out of scope.
     pub fn forget(mut self) {
         self.thread.take();
     }
