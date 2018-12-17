@@ -58,9 +58,9 @@ impl Stream for Interval {
     type Item = ();
     type Error = io::Error;
 
-    fn poll_next(&mut self, cx: &mut task::Context) -> Poll<Option<()>, io::Error> {
-        if self.delay.poll(cx)?.is_pending() {
-            return Ok(Async::Pending)
+    fn poll(&mut self) -> Poll<Option<()>, io::Error> {
+        if self.delay.poll()?.is_not_ready() {
+            return Ok(Async::NotReady)
         }
         let next = next_interval(delay::fires_at(&self.delay),
                                  Instant::now(),
