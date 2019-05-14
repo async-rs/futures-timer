@@ -35,6 +35,7 @@ impl Delay {
     ///
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
+    #[inline]
     pub fn new(dur: Duration) -> Delay {
         Delay::new_at(Instant::now() + dur)
     }
@@ -43,6 +44,7 @@ impl Delay {
     ///
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
+    #[inline]
     pub fn new_at(at: Instant) -> Delay {
         Delay::new_handle(at, Default::default())
     }
@@ -90,6 +92,7 @@ impl Delay {
     /// specified by `dur`.
     ///
     /// This is equivalent to calling `reset_at` with `Instant::now() + dur`
+    #[inline]
     pub fn reset(&mut self, dur: Duration) {
         self.reset_at(Instant::now() + dur)
     }
@@ -107,6 +110,7 @@ impl Delay {
     /// Note that if any task is currently blocked on this future then that task
     /// will be dropped. It is required to call `poll` again after this method
     /// has been called to ensure tha ta task is blocked on this future.
+    #[inline]
     pub fn reset_at(&mut self, at: Instant) {
         self.when = at;
         if self._reset(at).is_err() {
@@ -143,6 +147,7 @@ impl Delay {
     }
 }
 
+#[inline]
 pub fn fires_at(timeout: &Delay) -> Instant {
     timeout.when
 }
