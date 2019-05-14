@@ -70,21 +70,21 @@ extern crate futures;
 
 use std::cmp::Ordering;
 use std::mem;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
-use std::sync::{Arc, Weak, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
 use futures::task::AtomicTask;
-use futures::{Future, Async, Poll};
+use futures::{Async, Future, Poll};
 
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
 
 mod arc_list;
+pub mod ext;
 mod global;
 mod heap;
-pub mod ext;
 pub use ext::{FutureExt, StreamExt};
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
@@ -172,7 +172,9 @@ impl Timer {
 
     /// Returns a handle to this timer heap, used to create new timeouts.
     pub fn handle(&self) -> TimerHandle {
-        TimerHandle { inner: Arc::downgrade(&self.inner) }
+        TimerHandle {
+            inner: Arc::downgrade(&self.inner),
+        }
     }
 
     /// Returns the time at which this timer next needs to be invoked with
@@ -209,7 +211,11 @@ impl Timer {
             let heap_timer = self.timer_heap.pop().unwrap();
             *heap_timer.node.slot.lock().unwrap() = None;
             let bits = heap_timer.gen << 2;
-            match heap_timer.node.state.compare_exchange(bits, bits | 0b01, SeqCst, SeqCst) {
+            match heap_timer
+                .node
+                .state
+                .compare_exchange(bits, bits | 0b01, SeqCst, SeqCst)
+            {
                 Ok(_) => heap_timer.node.task.notify(),
                 Err(_b) => {}
             }
@@ -218,9 +224,7 @@ impl Timer {
 
     /// Either updates the timer at slot `idx` to fire at `at`, or adds a new
     /// timer at `idx` and sets it to fire at `at`.
-    fn update_or_add(&mut self,
-                     at: Instant,
-                     node: Arc<Node<ScheduledTimer>>) {
+    fn update_or_add(&mut self, at: Instant, node: Arc<Node<ScheduledTimer>>) {
         // TODO: avoid remove + push and instead just do one sift of the heap?
         // In theory we could update it in place and then do the percolation
         // as necessary
@@ -267,7 +271,7 @@ impl Future for Timer {
                 None => self.remove(node),
             }
         }
-        Ok(Async::NotReady)
+        Ok(Poll::Pending)
     }
 }
 
@@ -310,7 +314,7 @@ impl Ord for HeapTimer {
     }
 }
 
-static HANDLE_FALLBACK: AtomicUsize = ATOMIC_USIZE_INIT;
+static HANDLE_FALLBACK: AtomicUsize = AtomicUsize::new(0);
 
 /// Error returned from `TimerHandle::set_fallback`.
 #[derive(Clone, Debug)]
@@ -353,9 +357,7 @@ impl TimerHandle {
     }
 
     fn into_usize(self) -> usize {
-        unsafe {
-            mem::transmute::<Weak<Inner>, usize>(self.inner)
-        }
+        unsafe { mem::transmute::<Weak<Inner>, usize>(self.inner) }
     }
 
     unsafe fn from_usize(val: usize) -> TimerHandle {
@@ -389,7 +391,7 @@ impl Default for TimerHandle {
             if helper.handle().set_as_global_fallback().is_ok() {
                 let ret = helper.handle();
                 helper.forget();
-                return ret
+                return ret;
             }
             fallback = HANDLE_FALLBACK.load(SeqCst);
         }
@@ -402,7 +404,7 @@ impl Default for TimerHandle {
             let handle = TimerHandle::from_usize(fallback);
             let ret = handle.clone();
             drop(handle.into_usize());
-            return ret
+            return ret;
         }
     }
 }

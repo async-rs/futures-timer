@@ -59,10 +59,10 @@ fn drop_timer_wakes() {
     let mut t = Some(t);
     assert!(future::poll_fn(|| {
         match timeout.poll() {
-            Ok(Async::NotReady) => {}
+            Ok(Poll::Pending) => {}
             other => return other,
         }
         drop(t.take());
-        Ok(Async::NotReady)
+        Ok(Poll::Pending)
     }).wait().is_err());
 }

@@ -60,13 +60,13 @@ impl Stream for Interval {
 
     fn poll(&mut self) -> Poll<Option<()>, io::Error> {
         if self.delay.poll()?.is_not_ready() {
-            return Ok(Async::NotReady)
+            return Ok(Poll::Pending)
         }
         let next = next_interval(delay::fires_at(&self.delay),
                                  Instant::now(),
                                  self.interval);
         self.delay.reset_at(next);
-        Ok(Async::Ready(Some(())))
+        Ok(Poll::Ready(Some(())))
     }
 }
 

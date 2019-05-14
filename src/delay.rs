@@ -3,17 +3,19 @@
 //! This module contains the `Delay` type which is a future that will resolve
 //! at a particular point in the future.
 
+use std::futures::Future;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{Arc, Mutex};
+use std::task::Poll;
 use std::time::{Duration, Instant};
 
-use futures::{Future, Poll, Async};
 use futures::task::AtomicTask;
 
-use arc_list::Node;
-use {TimerHandle, ScheduledTimer};
+use crate::arc_list::Node;
+use crate::{ScheduledTimer, TimerHandle};
 
 /// A future representing the notification that an elapsed duration has
 /// occurred.
@@ -52,7 +54,12 @@ impl Delay {
     pub fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
-            None => return Delay { state: None, when: at },
+            None => {
+                return Delay {
+                    state: None,
+                    when: at,
+                }
+            }
         };
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
@@ -66,7 +73,10 @@ impl Delay {
         // timer, meaning that we'll want to immediately return an error from
         // `poll`.
         if inner.list.push(&state).is_err() {
-            return Delay { state: None, when: at }
+            return Delay {
+                state: None,
+                when: at,
+            };
         }
 
         inner.task.notify();
@@ -114,7 +124,7 @@ impl Delay {
             loop {
                 // If we've been invalidated, cancel this reset
                 if bits & 0b10 != 0 {
-                    return Err(())
+                    return Err(());
                 }
                 let new = bits.wrapping_add(0b100) & !0b11;
                 match state.state.compare_exchange(bits, new, SeqCst, SeqCst) {
@@ -138,17 +148,19 @@ pub fn fires_at(timeout: &Delay) -> Instant {
 }
 
 impl Future for Delay {
-    type Item = ();
-    type Error = io::Error;
+    type Output = io::Result<()>;
 
-    fn poll(&mut self) -> Poll<(), io::Error> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let state = match self.state {
             Some(ref state) => state,
-            None => return Err(io::Error::new(io::ErrorKind::Other,
-                                              "timer has gone away")),
+            None => {
+                let err = Err(io::Error::new(io::ErrorKind::Other, "timer has gone away"));
+                return Poll::Ready(err);
+            }
         };
+
         if state.state.load(SeqCst) & 1 != 0 {
-            return Ok(Async::Ready(()))
+            return Ok(Poll::Ready(()));
         }
 
         state.task.register();
@@ -157,10 +169,9 @@ impl Future for Delay {
         // state. If we've fired the first bit is set, and if we've been
         // invalidated the second bit is set.
         match state.state.load(SeqCst) {
-            n if n & 0b01 != 0 => Ok(Async::Ready(())),
-            n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other,
-                                                     "timer has gone away")),
-            _ => Ok(Async::NotReady),
+            n if n & 0b01 != 0 => Ok(Poll::Ready(())),
+            n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other, "timer has gone away")),
+            _ => Ok(Poll::Pending),
         }
     }
 }
