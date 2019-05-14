@@ -76,7 +76,7 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 
 use futures::prelude::*;
-use futures::task::AtomicTask;
+use futures::task::AtomicWaker;
 
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
@@ -85,7 +85,7 @@ mod arc_list;
 pub mod ext;
 mod global;
 mod heap;
-pub use ext::FutureExt;
+// pub use ext::FutureExt;
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
 /// `Interval`.
@@ -129,12 +129,12 @@ struct Inner {
     list: ArcList<ScheduledTimer>,
 
     /// The blocked `Timer` task to receive notifications to the `list` above.
-    task: AtomicTask,
+    waker: AtomicWaker,
 }
 
 /// Shared state between the `Timer` and a `Delay`.
 struct ScheduledTimer {
-    task: AtomicTask,
+    waker: AtomicWaker,
 
     // The lowest bit here is whether the timer has fired or not, the second
     // lowest bit is whether the timer has been invalidated, and all the other
@@ -164,7 +164,7 @@ impl Timer {
         Timer {
             inner: Arc::new(Inner {
                 list: ArcList::new(),
-                task: AtomicTask::new(),
+                waker: AtomicWaker::new(),
             }),
             timer_heap: Heap::new(),
         }
@@ -216,7 +216,7 @@ impl Timer {
                 .state
                 .compare_exchange(bits, bits | 0b01, SeqCst, SeqCst)
             {
-                Ok(_) => heap_timer.node.task.notify(),
+                Ok(_) => heap_timer.node.waker.wake(),
                 Err(_b) => {}
             }
         }
@@ -253,7 +253,7 @@ impl Timer {
 
     fn invalidate(&mut self, node: Arc<Node<ScheduledTimer>>) {
         node.state.fetch_or(0b10, SeqCst);
-        node.task.notify();
+        node.waker.wake();
     }
 }
 
@@ -261,7 +261,7 @@ impl Future for Timer {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.inner.task.register();
+        Pin::new(&mut self.inner).waker.register(cx.waker());
         let mut list = self.inner.list.take();
         while let Some(node) = list.pop() {
             let at = *node.at.lock().unwrap();

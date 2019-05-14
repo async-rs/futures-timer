@@ -1,10 +1,11 @@
 use std::io;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::task::Context;
+use std::task::{RawWaker, Waker};
 use std::thread;
 use std::time::Instant;
-
-use futures::executor::{spawn, Notify};
 
 use crate::{Timer, TimerHandle};
 
@@ -51,12 +52,15 @@ impl Drop for HelperThread {
 }
 
 fn run(timer: Timer, done: Arc<AtomicBool>) {
-    let mut timer = spawn(timer);
+    let mut timer = Pin::new(&mut timer);
     let me = Arc::new(ThreadUnpark {
         thread: thread::current(),
     });
+    let waker = unsafe { Waker::from_raw(RawWaker::new(me)) };
+    let mut cx = Context::from_waker(&waker);
+
     while !done.load(Ordering::SeqCst) {
-        drop(timer.poll_future_notify(&me, 0));
+        drop(timer.poll(cx));
         timer.get_mut().advance();
         match timer.get_mut().next_event() {
             // Ok, block for the specified time
@@ -79,8 +83,8 @@ struct ThreadUnpark {
     thread: thread::Thread,
 }
 
-impl Notify for ThreadUnpark {
-    fn notify(&self, _unpark_id: usize) {
-        self.thread.unpark()
-    }
-}
+// impl Notify for ThreadUnpark {
+//     fn notify(&self, _unpark_id: usize) {
+//         self.thread.unpark()
+//     }
+// }

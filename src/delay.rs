@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::task::AtomicTask;
+use futures::task::AtomicWaker;
 
 use crate::arc_list::Node;
 use crate::{ScheduledTimer, TimerHandle};
@@ -66,7 +66,7 @@ impl Delay {
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
             state: AtomicUsize::new(0),
-            task: AtomicTask::new(),
+            waker: AtomicWaker::new(),
             inner: handle.inner,
             slot: Mutex::new(None),
         }));
@@ -81,7 +81,7 @@ impl Delay {
             };
         }
 
-        inner.task.notify();
+        inner.waker.wake();
         Delay {
             state: Some(state),
             when: at,
@@ -140,7 +140,7 @@ impl Delay {
             // If we fail to push our node then we've become an inert timer, so
             // we'll want to clear our `state` field accordingly
             timeouts.list.push(state)?;
-            timeouts.task.notify();
+            timeouts.waker.wake();
         }
 
         Ok(())
@@ -165,18 +165,21 @@ impl Future for Delay {
         };
 
         if state.state.load(SeqCst) & 1 != 0 {
-            return Ok(Poll::Ready(()));
+            return Poll::Ready(Ok(()));
         }
 
-        state.task.register();
+        state.waker.register(&cx.waker());
 
         // Now that we've registered, do the full check of our own internal
         // state. If we've fired the first bit is set, and if we've been
         // invalidated the second bit is set.
         match state.state.load(SeqCst) {
-            n if n & 0b01 != 0 => Ok(Poll::Ready(())),
-            n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other, "timer has gone away")),
-            _ => Ok(Poll::Pending),
+            n if n & 0b01 != 0 => Poll::Ready(Ok(())),
+            n if n & 0b10 != 0 => Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::Other,
+                "timer has gone away",
+            ))),
+            _ => Poll::Pending,
         }
     }
 }
@@ -190,7 +193,7 @@ impl Drop for Delay {
         if let Some(timeouts) = state.inner.upgrade() {
             *state.at.lock().unwrap() = None;
             if timeouts.list.push(state).is_ok() {
-                timeouts.task.notify();
+                timeouts.waker.wake();
             }
         }
     }
