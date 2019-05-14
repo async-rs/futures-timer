@@ -3,8 +3,8 @@
 use std::time::{Duration, Instant};
 use std::io;
 use std::pin::Pin;
+use std::task::{Context, Poll};
 
-use futures::task::{Context, Poll};
 use futures::prelude::*;
 
 use crate::Delay;

@@ -66,17 +66,17 @@
 
 #![deny(missing_docs)]
 
-extern crate futures;
-
 use std::cmp::Ordering;
 use std::mem;
+use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex, Weak};
+use std::task::{Context, Poll};
 use std::time::Instant;
 
+use futures::prelude::*;
 use futures::task::AtomicTask;
-use futures::{Async, Future, Poll};
 
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
@@ -85,7 +85,7 @@ mod arc_list;
 pub mod ext;
 mod global;
 mod heap;
-pub use ext::{FutureExt, StreamExt};
+pub use ext::FutureExt;
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
 /// `Interval`.
@@ -258,10 +258,9 @@ impl Timer {
 }
 
 impl Future for Timer {
-    type Item = ();
-    type Error = ();
+    type Output = ();
 
-    fn poll(&mut self) -> Poll<(), ()> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.inner.task.register();
         let mut list = self.inner.list.take();
         while let Some(node) = list.pop() {
@@ -271,7 +270,7 @@ impl Future for Timer {
                 None => self.remove(node),
             }
         }
-        Ok(Poll::Pending)
+        Poll::Pending
     }
 }
 

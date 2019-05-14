@@ -1,12 +1,12 @@
 use std::io;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
 use futures::executor::{spawn, Notify};
 
-use {TimerHandle, Timer};
+use crate::{Timer, TimerHandle};
 
 pub struct HelperThread {
     thread: Option<thread::JoinHandle<()>>,
@@ -52,9 +52,9 @@ impl Drop for HelperThread {
 
 fn run(timer: Timer, done: Arc<AtomicBool>) {
     let mut timer = spawn(timer);
-	let me = Arc::new(ThreadUnpark {
-		thread: thread::current(),
-	});
+    let me = Arc::new(ThreadUnpark {
+        thread: thread::current(),
+    });
     while !done.load(Ordering::SeqCst) {
         drop(timer.poll_future_notify(&me, 0));
         timer.get_mut().advance();
