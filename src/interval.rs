@@ -61,8 +61,8 @@ impl Interval {
 impl Stream for Interval {
     type Item = ();
 
-    fn poll_next(mut self: Pin<&mut Self>, mut cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.delay().poll(cx).is_pending() {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if Pin::new(&mut *self).delay().poll(cx).is_pending() {
             return Poll::Pending;
         }
         let next = next_interval(delay::fires_at(&self.delay), Instant::now(), self.interval);

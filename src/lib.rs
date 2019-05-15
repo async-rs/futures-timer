@@ -82,7 +82,7 @@ use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
 
 mod arc_list;
-pub mod ext;
+// pub mod ext;
 mod global;
 mod heap;
 // pub use ext::FutureExt;
