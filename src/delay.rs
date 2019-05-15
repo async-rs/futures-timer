@@ -155,7 +155,7 @@ pub fn fires_at(timeout: &Delay) -> Instant {
 impl Future for Delay {
     type Output = io::Result<()>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let state = match self.state {
             Some(ref state) => state,
             None => {
