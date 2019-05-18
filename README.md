@@ -16,9 +16,6 @@ futures-timer = "0.1"
 An example of using a `Delay` is:
 
 ```rust
-extern crate futures;
-extern crate futures_timer;
-
 use std::time::Duration;
 
 use futures::prelude::*;
@@ -35,9 +32,6 @@ fn main() {
 And using an `Interval`:
 
 ```rust
-extern crate futures;
-extern crate futures_timer;
-
 use std::time::Duration;
 
 use futures::prelude::*;
@@ -55,8 +49,6 @@ fn main() {
 Or timing out a future
 
 ```rust
-extern crate futures_timer;
-
 use std::time::Duration;
 
 use futures_timer::FutureExt;

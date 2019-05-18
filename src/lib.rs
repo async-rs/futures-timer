@@ -7,27 +7,23 @@
 //!
 //! Basic usage of this crate is relatively simple:
 //!
-//! ```
-//! # extern crate futures;
-//! # extern crate futures_timer;
-//! # fn main() {
+//! ```no_run
+//! # #![feature(async_await)]
+//! # #[runtime::main]
+//! # async fn main() {
 //! use std::time::Duration;
 //! use futures_timer::Delay;
 //! use futures::prelude::*;
 //!
-//! let dur = Duration::from_secs(3);
-//! let fires_in_three_seconds = Delay::new(dur)
-//!     .map(|()| println!("prints three seconds later"));
-//! // spawn or use the future above
+//! let now = Delay::new(Duration::from_secs(3)).await;
+//! println!("waited for 3 secs");
 //! # }
 //! ```
 //!
 //! In addition to a one-shot future you can also create a stream of delayed
 //! notifications with the `Interval` type:
 //!
-//! ```
-//! # extern crate futures;
-//! # extern crate futures_timer;
+//! ```no_run
 //! # fn main() {
 //! use std::time::Duration;
 //! use futures_timer::Interval;

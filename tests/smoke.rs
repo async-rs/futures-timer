@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 use futures::future;
 use futures::prelude::*;
 use futures_timer::{Delay, Timer};
+
+use std::error::Error;
 use std::task::Poll;
 
 fn far_future() -> Instant {
@@ -14,40 +16,42 @@ fn far_future() -> Instant {
 async fn works() {
     let i = Instant::now();
     let dur = Duration::from_millis(100);
-    let d = Delay::new(dur).await;
-    assert!(dbg!(i.elapsed() > dur));
+    let _d = Delay::new(dur).await;
+    assert!(i.elapsed() > dur);
+}
+
+#[runtime::test]
+async fn error_after_inert() {
+    let t = Timer::new();
+    let handle = t.handle();
+    drop(t);
+    let res = Delay::new_handle(far_future(), handle).await;
+    assert!(res.is_err());
+}
+
+#[runtime::test]
+async fn drop_makes_inert() {
+    let t = Timer::new();
+    let handle = t.handle();
+    let timeout = Delay::new_handle(far_future(), handle);
+    drop(t);
+    let res = timeout.await;
+    assert!(res.is_err());
 }
 
 // #[runtime::test]
-// async fn error_after_inert() {
-//     let t = Timer::new();
-//     let handle = t.handle();
-//     drop(t);
-//     assert!(Delay::new_handle(far_future(), handle).poll().is_err());
-// }
-
-// #[runtime::test]
-// async fn drop_makes_inert() {
-//     let t = Timer::new();
-//     let handle = t.handle();
-//     let timeout = Delay::new_handle(far_future(), handle);
-//     drop(t);
-//     let res = timeout.await;
-//     assert!(res.is_err());
-// }
-
-// #[test]
-// fn reset() {
+// async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
 //     let i = Instant::now();
 //     let dur = Duration::from_millis(100);
 //     let mut d = Delay::new(dur);
-//     future::poll_fn(|| d.poll()).wait().unwrap();
+//     d.await?;
 //     assert!(i.elapsed() > dur);
 
 //     let i = Instant::now();
 //     d.reset(dur);
-//     future::poll_fn(|| d.poll()).wait().unwrap();
+//     d.await?;
 //     assert!(i.elapsed() > dur);
+//     Ok(())
 // }
 
 // #[test]
