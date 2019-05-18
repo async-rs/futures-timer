@@ -78,9 +78,10 @@ use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
 
 mod arc_list;
-// pub mod ext;
 mod global;
 mod heap;
+
+// pub mod ext;
 // pub use ext::FutureExt;
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
