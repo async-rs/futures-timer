@@ -21,11 +21,10 @@ use std::time::Duration;
 use futures::prelude::*;
 use futures_timer::Delay;
 
-fn main() {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     Delay::new(Duration::from_secs(3))
-      .map(|()| println!("printed after three seconds"))
-      .wait()
-      .unwrap();
+        .map(|()| println!("printed after three seconds"))
+        .await?;
 }
 ```
 
@@ -37,12 +36,12 @@ use std::time::Duration;
 use futures::prelude::*;
 use futures_timer::Interval;
 
-fn main() {
+#[runtime::main]
+async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     Interval::new(Duration::from_secs(4))
-      .take(4)
-      .for_each(|()| Ok(println!("printed after three seconds")))
-      .wait()
-      .unwrap();
+        .take(4)
+        .for_each(|()| Ok(println!("printed after three seconds")))
+        .await?;
 }
 ```
 
@@ -53,7 +52,7 @@ use std::time::Duration;
 
 use futures_timer::FutureExt;
 
-fn main() {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     // create a future that will take at most 3 seconds to resolve
     let future = long_running_future()
       .timeout(Duration::from_secs(3));
