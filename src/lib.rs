@@ -61,6 +61,7 @@
 //! is firing a timer (which invovles removing from the heap).
 
 #![deny(missing_docs)]
+#![feature(arbitrary_self_types)]
 
 use std::cmp::Ordering;
 use std::mem;
@@ -81,8 +82,8 @@ mod arc_list;
 mod global;
 mod heap;
 
-// pub mod ext;
-// pub use ext::FutureExt;
+pub mod ext;
+pub use ext::FutureExt;
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
 /// `Interval`.

@@ -1,12 +1,10 @@
 #![feature(async_await)]
 use std::time::{Duration, Instant};
 
-use futures::future;
-use futures::prelude::*;
 use futures_timer::{Delay, Timer};
 
 use std::error::Error;
-use std::task::Poll;
+use std::pin::Pin;
 
 fn far_future() -> Instant {
     Instant::now() + Duration::new(5000, 0)
@@ -39,20 +37,23 @@ async fn drop_makes_inert() {
     assert!(res.is_err());
 }
 
-// #[runtime::test]
-// async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
-//     let i = Instant::now();
-//     let dur = Duration::from_millis(100);
-//     let mut d = Delay::new(dur);
-//     d.await?;
-//     assert!(i.elapsed() > dur);
+#[runtime::test]
+async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    let i = Instant::now();
+    let dur = Duration::from_millis(100);
+    let mut d = Delay::new(dur);
 
-//     let i = Instant::now();
-//     d.reset(dur);
-//     d.await?;
-//     assert!(i.elapsed() > dur);
-//     Ok(())
-// }
+    // Allow us to re-use a future
+    Pin::new(&mut d).await?;
+
+    assert!(i.elapsed() > dur);
+
+    let i = Instant::now();
+    d.reset(dur);
+    d.await?;
+    assert!(i.elapsed() > dur);
+    Ok(())
+}
 
 // #[test]
 // fn drop_timer_wakes() {

@@ -1,13 +1,13 @@
 #![feature(async_await)]
 
-use std::time::{Duration, Instant};
 use std::error::Error;
+use std::time::{Duration, Instant};
 
 use futures::prelude::*;
 use futures_timer::Interval;
 
 #[runtime::test]
-async fn single() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
+async fn single() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let dur = Duration::from_millis(10);
     let start = Instant::now();
     let interval = Interval::new(dur);
@@ -17,7 +17,7 @@ async fn single() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
 }
 
 #[runtime::test]
-async fn two_times() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
+async fn two_times() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let dur = Duration::from_millis(10);
     let start = Instant::now();
     let interval = Interval::new(dur);
