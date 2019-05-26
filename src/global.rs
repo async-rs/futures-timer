@@ -1,13 +1,14 @@
 use std::future::Future;
 use std::io;
 use std::mem::{self, ManuallyDrop};
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::task::Context;
-use std::task::{RawWaker, RawWakerVTable, Waker};
+use std::task::{Context, RawWaker, RawWakerVTable, Waker};
 use std::thread;
+use std::thread::Thread;
 use std::time::Instant;
+
+use pin_utils::pin_mut;
 
 use crate::{Timer, TimerHandle};
 
@@ -53,36 +54,16 @@ impl Drop for HelperThread {
     }
 }
 
-fn run(mut timer: Timer, done: Arc<AtomicBool>) {
-    let me = Arc::into_raw(Arc::new(ThreadUnpark {
-        thread: thread::current(),
-    }));
+fn run(timer: Timer, done: Arc<AtomicBool>) {
+    let mut waker = current_thread_waker();
+    let mut cx = Context::from_waker(&mut waker);
 
-    unsafe fn raw_clone(ptr: *const ()) -> RawWaker {
-        let me = ManuallyDrop::new(Arc::from_raw(ptr as *const ThreadUnpark));
-        mem::forget(me.clone());
-        RawWaker::new(ptr, &VTABLE)
-    }
-    unsafe fn raw_wake(ptr: *const ()) {
-        let me = Arc::from_raw(ptr as *const ThreadUnpark);
-        me.thread.unpark()
-    }
-    unsafe fn raw_wake_by_ref(ptr: *const ()) {
-        let me = ManuallyDrop::new(Arc::from_raw(ptr as *const ThreadUnpark));
-        me.thread.unpark()
-    }
-    unsafe fn raw_drop(ptr: *const ()) {
-        Arc::from_raw(ptr as *const ThreadUnpark);
-    }
-    static VTABLE: RawWakerVTable =
-        RawWakerVTable::new(raw_clone, raw_wake, raw_wake_by_ref, raw_drop);
-    let waker = unsafe { Waker::from_raw(RawWaker::new(me as *const (), &VTABLE)) };
-    let mut cx = Context::from_waker(&waker);
-
+    pin_mut!(timer);
     while !done.load(Ordering::SeqCst) {
-        drop(Pin::new(&mut timer).poll(&mut cx));
-        Pin::new(&mut timer).get_mut().advance();
-        match Pin::new(&mut timer).get_mut().next_event() {
+        drop(timer.as_mut().poll(&mut cx));
+
+        timer.advance();
+        match timer.next_event() {
             // Ok, block for the specified time
             Some(when) => {
                 let now = Instant::now();
@@ -99,12 +80,27 @@ fn run(mut timer: Timer, done: Arc<AtomicBool>) {
     }
 }
 
-struct ThreadUnpark {
-    thread: thread::Thread,
+static VTABLE: RawWakerVTable = RawWakerVTable::new(raw_clone, raw_wake, raw_wake_by_ref, raw_drop);
+
+fn raw_clone(ptr: *const ()) -> RawWaker {
+    let me = ManuallyDrop::new(unsafe { Arc::from_raw(ptr as *const Thread) });
+    mem::forget(me.clone());
+    RawWaker::new(ptr, &VTABLE)
 }
 
-// impl Notify for ThreadUnpark {
-//     fn notify(&self, _unpark_id: usize) {
-//         self.thread.unpark()
-//     }
-// }
+fn raw_wake(ptr: *const ()) {
+    unsafe { Arc::from_raw(ptr as *const Thread) }.unpark()
+}
+
+fn raw_wake_by_ref(ptr: *const ()) {
+    ManuallyDrop::new(unsafe { Arc::from_raw(ptr as *const Thread) }).unpark()
+}
+
+fn raw_drop(ptr: *const ()) {
+    unsafe { Arc::from_raw(ptr as *const Thread) };
+}
+
+fn current_thread_waker() -> Waker {
+    let thread = Arc::new(thread::current());
+    unsafe { Waker::from_raw(raw_clone(Arc::into_raw(thread) as *const ())) }
+}

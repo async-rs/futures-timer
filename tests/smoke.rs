@@ -1,12 +1,14 @@
 #![feature(async_await)]
 use std::time::{Duration, Instant};
 
-use futures::future;
-use futures::prelude::*;
+use futures::future::poll_fn;
 use futures_timer::{Delay, Timer};
 
 use std::error::Error;
+use std::pin::Pin;
 use std::task::Poll;
+
+use futures::prelude::*;
 
 fn far_future() -> Instant {
     Instant::now() + Duration::new(5000, 0)
@@ -39,35 +41,40 @@ async fn drop_makes_inert() {
     assert!(res.is_err());
 }
 
-// #[runtime::test]
-// async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
-//     let i = Instant::now();
-//     let dur = Duration::from_millis(100);
-//     let mut d = Delay::new(dur);
-//     d.await?;
-//     assert!(i.elapsed() > dur);
+#[runtime::test]
+async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    let i = Instant::now();
+    let dur = Duration::from_millis(100);
+    let mut d = Delay::new(dur);
 
-//     let i = Instant::now();
-//     d.reset(dur);
-//     d.await?;
-//     assert!(i.elapsed() > dur);
-//     Ok(())
-// }
+    // Allow us to re-use a future
+    Pin::new(&mut d).await?;
 
-// #[test]
-// fn drop_timer_wakes() {
-//     let t = Timer::new();
-//     let handle = t.handle();
-//     let mut timeout = Delay::new_handle(far_future(), handle);
-//     let mut t = Some(t);
-//     assert!(future::poll_fn(|| {
-//         match timeout.poll() {
-//             Ok(Poll::Pending) => {}
-//             other => return other,
-//         }
-//         drop(t.take());
-//         Ok(Poll::Pending)
-//     })
-//     .wait()
-//     .is_err());
-// }
+    assert!(i.elapsed() > dur);
+
+    let i = Instant::now();
+    d.reset(dur);
+    d.await?;
+    assert!(i.elapsed() > dur);
+    Ok(())
+}
+
+#[runtime::test]
+async fn drop_timer_wakes() {
+    let t = Timer::new();
+    let handle = t.handle();
+    let mut timeout = Delay::new_handle(far_future(), handle);
+    let mut t = Some(t);
+    let f = poll_fn(move |cx| {
+        let timeout = unsafe { Pin::new_unchecked(&mut timeout) };
+        match TryFuture::try_poll(timeout, cx) {
+            Poll::Pending => {}
+            other => return other,
+        }
+        drop(t.take());
+        Poll::Pending
+    });
+
+    let res = f.await;
+    assert_eq!("timer has gone away", res.unwrap_err().description());
+}

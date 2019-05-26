@@ -81,8 +81,8 @@ mod arc_list;
 mod global;
 mod heap;
 
-// pub mod ext;
-// pub use ext::FutureExt;
+pub mod ext;
+pub use ext::FutureExt;
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
 /// `Interval`.
