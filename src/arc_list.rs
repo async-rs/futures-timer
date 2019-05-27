@@ -2,9 +2,9 @@
 
 use std::marker;
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicUsize, AtomicBool};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::Arc;
 
 pub struct ArcList<T> {
     list: AtomicUsize,
@@ -28,15 +28,17 @@ impl<T> ArcList<T> {
         if data.enqueued.swap(true, SeqCst) {
             // note that even if our list is sealed off then the other end is
             // still guaranteed to see us because we were previously enqueued.
-            return Ok(())
+            return Ok(());
         }
         let mut head = self.list.load(SeqCst);
         let node = Arc::into_raw(data.clone()) as usize;
         loop {
             // If we've been sealed off, abort and return an error
             if head == 1 {
-                unsafe { drop(Arc::from_raw(node as *mut Node<T>)); }
-                return Err(())
+                unsafe {
+                    drop(Arc::from_raw(node as *mut Node<T>));
+                }
+                return Err(());
             }
 
             // Otherwise attempt to push this node
@@ -54,7 +56,7 @@ impl<T> ArcList<T> {
         let mut list = self.list.load(SeqCst);
         loop {
             if list == 1 {
-                break
+                break;
             }
             match self.list.compare_exchange(list, 0, SeqCst, SeqCst) {
                 Ok(_) => break,
@@ -81,7 +83,7 @@ impl<T> ArcList<T> {
     pub fn pop(&mut self) -> Option<Arc<Node<T>>> {
         let head = *self.list.get_mut();
         if head == 0 || head == 1 {
-            return None
+            return None;
         }
         let head = unsafe { Arc::from_raw(head as *const Node<T>) };
         *self.list.get_mut() = head.next.load(SeqCst);

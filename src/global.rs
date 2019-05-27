@@ -1,13 +1,13 @@
+use std::future::Future;
 use std::io;
+use std::mem::{self, ManuallyDrop};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::Context;
-use std::task::{RawWaker, Waker, RawWakerVTable};
+use std::task::{RawWaker, RawWakerVTable, Waker};
 use std::thread;
 use std::time::Instant;
-use std::future::Future;
-use std::mem::{self, ManuallyDrop};
 
 use crate::{Timer, TimerHandle};
 
@@ -74,7 +74,8 @@ fn run(mut timer: Timer, done: Arc<AtomicBool>) {
     unsafe fn raw_drop(ptr: *const ()) {
         Arc::from_raw(ptr as *const ThreadUnpark);
     }
-    static VTABLE: RawWakerVTable = RawWakerVTable::new(raw_clone, raw_wake, raw_wake_by_ref, raw_drop);
+    static VTABLE: RawWakerVTable =
+        RawWakerVTable::new(raw_clone, raw_wake, raw_wake_by_ref, raw_drop);
     let waker = unsafe { Waker::from_raw(RawWaker::new(me as *const (), &VTABLE)) };
     let mut cx = Context::from_waker(&waker);
 
