@@ -1,12 +1,15 @@
 use std::io;
-use std::sync::Arc;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::task::Context;
+use std::task::{RawWaker, Waker, RawWakerVTable};
 use std::thread;
 use std::time::Instant;
+use std::future::Future;
+use std::mem::{self, ManuallyDrop};
 
-use futures::executor::{spawn, Notify};
-
-use {TimerHandle, Timer};
+use crate::{Timer, TimerHandle};
 
 pub struct HelperThread {
     thread: Option<thread::JoinHandle<()>>,
@@ -50,15 +53,35 @@ impl Drop for HelperThread {
     }
 }
 
-fn run(timer: Timer, done: Arc<AtomicBool>) {
-    let mut timer = spawn(timer);
-	let me = Arc::new(ThreadUnpark {
-		thread: thread::current(),
-	});
+fn run(mut timer: Timer, done: Arc<AtomicBool>) {
+    let me = Arc::into_raw(Arc::new(ThreadUnpark {
+        thread: thread::current(),
+    }));
+
+    unsafe fn raw_clone(ptr: *const ()) -> RawWaker {
+        let me = ManuallyDrop::new(Arc::from_raw(ptr as *const ThreadUnpark));
+        mem::forget(me.clone());
+        RawWaker::new(ptr, &VTABLE)
+    }
+    unsafe fn raw_wake(ptr: *const ()) {
+        let me = Arc::from_raw(ptr as *const ThreadUnpark);
+        me.thread.unpark()
+    }
+    unsafe fn raw_wake_by_ref(ptr: *const ()) {
+        let me = ManuallyDrop::new(Arc::from_raw(ptr as *const ThreadUnpark));
+        me.thread.unpark()
+    }
+    unsafe fn raw_drop(ptr: *const ()) {
+        Arc::from_raw(ptr as *const ThreadUnpark);
+    }
+    static VTABLE: RawWakerVTable = RawWakerVTable::new(raw_clone, raw_wake, raw_wake_by_ref, raw_drop);
+    let waker = unsafe { Waker::from_raw(RawWaker::new(me as *const (), &VTABLE)) };
+    let mut cx = Context::from_waker(&waker);
+
     while !done.load(Ordering::SeqCst) {
-        drop(timer.poll_future_notify(&me, 0));
-        timer.get_mut().advance();
-        match timer.get_mut().next_event() {
+        drop(Pin::new(&mut timer).poll(&mut cx));
+        Pin::new(&mut timer).get_mut().advance();
+        match Pin::new(&mut timer).get_mut().next_event() {
             // Ok, block for the specified time
             Some(when) => {
                 let now = Instant::now();
@@ -79,8 +102,8 @@ struct ThreadUnpark {
     thread: thread::Thread,
 }
 
-impl Notify for ThreadUnpark {
-    fn notify(&self, _unpark_id: usize) {
-        self.thread.unpark()
-    }
-}
+// impl Notify for ThreadUnpark {
+//     fn notify(&self, _unpark_id: usize) {
+//         self.thread.unpark()
+//     }
+// }

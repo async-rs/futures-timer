@@ -1,68 +1,73 @@
-extern crate futures;
-extern crate futures_timer;
-
-use std::time::{Instant, Duration};
+#![feature(async_await)]
+use std::time::{Duration, Instant};
 
 use futures::future;
 use futures::prelude::*;
-use futures_timer::{Timer, Delay};
+use futures_timer::{Delay, Timer};
+
+use std::error::Error;
+use std::task::Poll;
 
 fn far_future() -> Instant {
     Instant::now() + Duration::new(5000, 0)
 }
 
-#[test]
-fn works() {
+#[runtime::test]
+async fn works() {
     let i = Instant::now();
     let dur = Duration::from_millis(100);
-    let d = Delay::new(dur);
-    d.wait().unwrap();
+    let _d = Delay::new(dur).await;
     assert!(i.elapsed() > dur);
 }
 
-#[test]
-fn error_after_inert() {
+#[runtime::test]
+async fn error_after_inert() {
     let t = Timer::new();
     let handle = t.handle();
     drop(t);
-    assert!(Delay::new_handle(far_future(), handle).poll().is_err());
+    let res = Delay::new_handle(far_future(), handle).await;
+    assert!(res.is_err());
 }
 
-#[test]
-fn drop_makes_inert() {
+#[runtime::test]
+async fn drop_makes_inert() {
     let t = Timer::new();
     let handle = t.handle();
     let timeout = Delay::new_handle(far_future(), handle);
     drop(t);
-    assert!(timeout.wait().is_err());
+    let res = timeout.await;
+    assert!(res.is_err());
 }
 
-#[test]
-fn reset() {
-    let i = Instant::now();
-    let dur = Duration::from_millis(100);
-    let mut d = Delay::new(dur);
-    future::poll_fn(|| d.poll()).wait().unwrap();
-    assert!(i.elapsed() > dur);
+// #[runtime::test]
+// async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
+//     let i = Instant::now();
+//     let dur = Duration::from_millis(100);
+//     let mut d = Delay::new(dur);
+//     d.await?;
+//     assert!(i.elapsed() > dur);
 
-    let i = Instant::now();
-    d.reset(dur);
-    future::poll_fn(|| d.poll()).wait().unwrap();
-    assert!(i.elapsed() > dur);
-}
+//     let i = Instant::now();
+//     d.reset(dur);
+//     d.await?;
+//     assert!(i.elapsed() > dur);
+//     Ok(())
+// }
 
-#[test]
-fn drop_timer_wakes() {
-    let t = Timer::new();
-    let handle = t.handle();
-    let mut timeout = Delay::new_handle(far_future(), handle);
-    let mut t = Some(t);
-    assert!(future::poll_fn(|| {
-        match timeout.poll() {
-            Ok(Async::NotReady) => {}
-            other => return other,
-        }
-        drop(t.take());
-        Ok(Async::NotReady)
-    }).wait().is_err());
-}
+// #[test]
+// fn drop_timer_wakes() {
+//     let t = Timer::new();
+//     let handle = t.handle();
+//     let mut timeout = Delay::new_handle(far_future(), handle);
+//     let mut t = Some(t);
+//     assert!(future::poll_fn(|| {
+//         match timeout.poll() {
+//             Ok(Poll::Pending) => {}
+//             other => return other,
+//         }
+//         drop(t.take());
+//         Ok(Poll::Pending)
+//     })
+//     .wait()
+//     .is_err());
+// }

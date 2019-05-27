@@ -1,25 +1,23 @@
-extern crate futures;
-extern crate futures_timer;
+#![feature(async_await)]
 
 use std::time::{Instant, Duration};
+use std::error::Error;
 
-use futures::prelude::*;
 use futures_timer::Delay;
 
-#[test]
-fn smoke() {
+#[runtime::test]
+async fn smoke() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
     let dur = Duration::from_millis(10);
     let start = Instant::now();
-    let timeout = Delay::new(dur);
-    timeout.wait().unwrap();
+    Delay::new(dur).await?;
     assert!(start.elapsed() >= (dur / 2));
+    Ok(())
 }
 
-#[test]
-fn two() {
+#[runtime::test]
+async fn two() -> Result<(), Box<dyn Error + Send + Sync + 'static>>{
     let dur = Duration::from_millis(10);
-    let timeout = Delay::new(dur);
-    timeout.wait().unwrap();
-    let timeout = Delay::new(dur);
-    timeout.wait().unwrap();
+    Delay::new(dur).await?;
+    Delay::new(dur).await?;
+    Ok(())
 }

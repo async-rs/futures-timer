@@ -7,27 +7,23 @@
 //!
 //! Basic usage of this crate is relatively simple:
 //!
-//! ```
-//! # extern crate futures;
-//! # extern crate futures_timer;
-//! # fn main() {
+//! ```no_run
+//! # #![feature(async_await)]
+//! # #[runtime::main]
+//! # async fn main() {
 //! use std::time::Duration;
 //! use futures_timer::Delay;
 //! use futures::prelude::*;
 //!
-//! let dur = Duration::from_secs(3);
-//! let fires_in_three_seconds = Delay::new(dur)
-//!     .map(|()| println!("prints three seconds later"));
-//! // spawn or use the future above
+//! let now = Delay::new(Duration::from_secs(3)).await;
+//! println!("waited for 3 secs");
 //! # }
 //! ```
 //!
 //! In addition to a one-shot future you can also create a stream of delayed
 //! notifications with the `Interval` type:
 //!
-//! ```
-//! # extern crate futures;
-//! # extern crate futures_timer;
+//! ```no_run
 //! # fn main() {
 //! use std::time::Duration;
 //! use futures_timer::Interval;
@@ -66,17 +62,17 @@
 
 #![deny(missing_docs)]
 
-extern crate futures;
-
 use std::cmp::Ordering;
 use std::mem;
+use std::pin::Pin;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
-use std::sync::{Arc, Weak, Mutex};
+use std::sync::{Arc, Mutex, Weak};
+use std::task::{Context, Poll};
 use std::time::Instant;
 
-use futures::task::AtomicTask;
-use futures::{Future, Async, Poll};
+use futures::prelude::*;
+use futures::task::AtomicWaker;
 
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
@@ -84,8 +80,9 @@ use heap::{Heap, Slot};
 mod arc_list;
 mod global;
 mod heap;
-pub mod ext;
-pub use ext::{FutureExt, StreamExt};
+
+// pub mod ext;
+// pub use ext::FutureExt;
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
 /// `Interval`.
@@ -129,12 +126,12 @@ struct Inner {
     list: ArcList<ScheduledTimer>,
 
     /// The blocked `Timer` task to receive notifications to the `list` above.
-    task: AtomicTask,
+    waker: AtomicWaker,
 }
 
 /// Shared state between the `Timer` and a `Delay`.
 struct ScheduledTimer {
-    task: AtomicTask,
+    waker: AtomicWaker,
 
     // The lowest bit here is whether the timer has fired or not, the second
     // lowest bit is whether the timer has been invalidated, and all the other
@@ -164,7 +161,7 @@ impl Timer {
         Timer {
             inner: Arc::new(Inner {
                 list: ArcList::new(),
-                task: AtomicTask::new(),
+                waker: AtomicWaker::new(),
             }),
             timer_heap: Heap::new(),
         }
@@ -172,7 +169,9 @@ impl Timer {
 
     /// Returns a handle to this timer heap, used to create new timeouts.
     pub fn handle(&self) -> TimerHandle {
-        TimerHandle { inner: Arc::downgrade(&self.inner) }
+        TimerHandle {
+            inner: Arc::downgrade(&self.inner),
+        }
     }
 
     /// Returns the time at which this timer next needs to be invoked with
@@ -209,8 +208,12 @@ impl Timer {
             let heap_timer = self.timer_heap.pop().unwrap();
             *heap_timer.node.slot.lock().unwrap() = None;
             let bits = heap_timer.gen << 2;
-            match heap_timer.node.state.compare_exchange(bits, bits | 0b01, SeqCst, SeqCst) {
-                Ok(_) => heap_timer.node.task.notify(),
+            match heap_timer
+                .node
+                .state
+                .compare_exchange(bits, bits | 0b01, SeqCst, SeqCst)
+            {
+                Ok(_) => heap_timer.node.waker.wake(),
                 Err(_b) => {}
             }
         }
@@ -218,9 +221,7 @@ impl Timer {
 
     /// Either updates the timer at slot `idx` to fire at `at`, or adds a new
     /// timer at `idx` and sets it to fire at `at`.
-    fn update_or_add(&mut self,
-                     at: Instant,
-                     node: Arc<Node<ScheduledTimer>>) {
+    fn update_or_add(&mut self, at: Instant, node: Arc<Node<ScheduledTimer>>) {
         // TODO: avoid remove + push and instead just do one sift of the heap?
         // In theory we could update it in place and then do the percolation
         // as necessary
@@ -249,16 +250,15 @@ impl Timer {
 
     fn invalidate(&mut self, node: Arc<Node<ScheduledTimer>>) {
         node.state.fetch_or(0b10, SeqCst);
-        node.task.notify();
+        node.waker.wake();
     }
 }
 
 impl Future for Timer {
-    type Item = ();
-    type Error = ();
+    type Output = ();
 
-    fn poll(&mut self) -> Poll<(), ()> {
-        self.inner.task.register();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Pin::new(&mut self.inner).waker.register(cx.waker());
         let mut list = self.inner.list.take();
         while let Some(node) = list.pop() {
             let at = *node.at.lock().unwrap();
@@ -267,7 +267,7 @@ impl Future for Timer {
                 None => self.remove(node),
             }
         }
-        Ok(Async::NotReady)
+        Poll::Pending
     }
 }
 
@@ -310,7 +310,7 @@ impl Ord for HeapTimer {
     }
 }
 
-static HANDLE_FALLBACK: AtomicUsize = ATOMIC_USIZE_INIT;
+static HANDLE_FALLBACK: AtomicUsize = AtomicUsize::new(0);
 
 /// Error returned from `TimerHandle::set_fallback`.
 #[derive(Clone, Debug)]
@@ -353,9 +353,7 @@ impl TimerHandle {
     }
 
     fn into_usize(self) -> usize {
-        unsafe {
-            mem::transmute::<Weak<Inner>, usize>(self.inner)
-        }
+        unsafe { mem::transmute::<Weak<Inner>, usize>(self.inner) }
     }
 
     unsafe fn from_usize(val: usize) -> TimerHandle {
@@ -389,7 +387,7 @@ impl Default for TimerHandle {
             if helper.handle().set_as_global_fallback().is_ok() {
                 let ret = helper.handle();
                 helper.forget();
-                return ret
+                return ret;
             }
             fallback = HANDLE_FALLBACK.load(SeqCst);
         }
@@ -402,7 +400,7 @@ impl Default for TimerHandle {
             let handle = TimerHandle::from_usize(fallback);
             let ret = handle.clone();
             drop(handle.into_usize());
-            return ret
+            return ret;
         }
     }
 }

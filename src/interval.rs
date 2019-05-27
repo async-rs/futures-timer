@@ -1,10 +1,12 @@
+use pin_utils::unsafe_pinned;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use std::io;
 
 use futures::prelude::*;
 
-use {Delay, TimerHandle};
-use delay;
+use crate::delay;
+use crate::{Delay, TimerHandle};
 
 /// A stream representing notifications at fixed interval
 ///
@@ -21,6 +23,8 @@ pub struct Interval {
 }
 
 impl Interval {
+    unsafe_pinned!(delay: Delay);
+
     /// Creates a new interval which will fire at `dur` time into the future,
     /// and will repeat every `dur` interval after
     ///
@@ -56,17 +60,14 @@ impl Interval {
 
 impl Stream for Interval {
     type Item = ();
-    type Error = io::Error;
 
-    fn poll(&mut self) -> Poll<Option<()>, io::Error> {
-        if self.delay.poll()?.is_not_ready() {
-            return Ok(Async::NotReady)
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if Pin::new(&mut *self).delay().poll(cx).is_pending() {
+            return Poll::Pending;
         }
-        let next = next_interval(delay::fires_at(&self.delay),
-                                 Instant::now(),
-                                 self.interval);
+        let next = next_interval(delay::fires_at(&self.delay), Instant::now(), self.interval);
         self.delay.reset_at(next);
-        Ok(Async::Ready(Some(())))
+        Poll::Ready(Some(()))
     }
 }
 
@@ -89,22 +90,26 @@ fn next_interval(prev: Instant, now: Instant, interval: Duration) -> Instant {
     if new > now {
         return new;
     } else {
-        let spent_ns = duration_to_nanos(now.duration_since(prev))
-            .expect("interval should be expired");
-        let interval_ns = duration_to_nanos(interval)
-            .expect("interval is less that 427 thousand years");
-        let mult = spent_ns/interval_ns + 1;
-        assert!(mult < (1 << 32),
+        let spent_ns =
+            duration_to_nanos(now.duration_since(prev)).expect("interval should be expired");
+        let interval_ns =
+            duration_to_nanos(interval).expect("interval is less that 427 thousand years");
+        let mult = spent_ns / interval_ns + 1;
+        assert!(
+            mult < (1 << 32),
             "can't skip more than 4 billion intervals of {:?} \
-             (trying to skip {})", interval, mult);
+             (trying to skip {})",
+            interval,
+            mult
+        );
         return prev + interval * (mult as u32);
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::time::{Instant, Duration};
     use super::next_interval;
+    use std::time::{Duration, Instant};
 
     struct Timeline(Instant);
 
@@ -139,23 +144,35 @@ mod test {
     #[test]
     fn norm_next() {
         let tm = Timeline::new();
-        assert!(almost_eq(next_interval(tm.at(1), tm.at(2), dur(10)),
-                                        tm.at(11)));
-        assert!(almost_eq(next_interval(tm.at(7777), tm.at(7788), dur(100)),
-                                        tm.at(7877)));
-        assert!(almost_eq(next_interval(tm.at(1), tm.at(1000), dur(2100)),
-                                        tm.at(2101)));
+        assert!(almost_eq(
+            next_interval(tm.at(1), tm.at(2), dur(10)),
+            tm.at(11)
+        ));
+        assert!(almost_eq(
+            next_interval(tm.at(7777), tm.at(7788), dur(100)),
+            tm.at(7877)
+        ));
+        assert!(almost_eq(
+            next_interval(tm.at(1), tm.at(1000), dur(2100)),
+            tm.at(2101)
+        ));
     }
 
     #[test]
     fn fast_forward() {
         let tm = Timeline::new();
-        assert!(almost_eq(next_interval(tm.at(1), tm.at(1000), dur(10)),
-                                        tm.at(1001)));
-        assert!(almost_eq(next_interval(tm.at(7777), tm.at(8888), dur(100)),
-                                        tm.at(8977)));
-        assert!(almost_eq(next_interval(tm.at(1), tm.at(10000), dur(2100)),
-                                        tm.at(10501)));
+        assert!(almost_eq(
+            next_interval(tm.at(1), tm.at(1000), dur(10)),
+            tm.at(1001)
+        ));
+        assert!(almost_eq(
+            next_interval(tm.at(7777), tm.at(8888), dur(100)),
+            tm.at(8977)
+        ));
+        assert!(almost_eq(
+            next_interval(tm.at(1), tm.at(10000), dur(2100)),
+            tm.at(10501)
+        ));
     }
 
     /// TODO: this test actually should be successful, but since we can't
@@ -165,8 +182,9 @@ mod test {
     #[should_panic(expected = "can't skip more than 4 billion intervals")]
     fn large_skip() {
         let tm = Timeline::new();
-        assert_eq!(next_interval(
-            tm.at_ns(0, 1), tm.at_ns(25, 0), Duration::new(0, 2)),
-            tm.at_ns(25, 1));
+        assert_eq!(
+            next_interval(tm.at_ns(0, 1), tm.at_ns(25, 0), Duration::new(0, 2)),
+            tm.at_ns(25, 1)
+        );
     }
 }

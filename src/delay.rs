@@ -3,17 +3,19 @@
 //! This module contains the `Delay` type which is a future that will resolve
 //! at a particular point in the future.
 
+use std::future::Future;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::{Future, Poll, Async};
-use futures::task::AtomicTask;
+use futures::task::AtomicWaker;
 
-use arc_list::Node;
-use {TimerHandle, ScheduledTimer};
+use crate::arc_list::Node;
+use crate::{ScheduledTimer, TimerHandle};
 
 /// A future representing the notification that an elapsed duration has
 /// occurred.
@@ -33,6 +35,7 @@ impl Delay {
     ///
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
+    #[inline]
     pub fn new(dur: Duration) -> Delay {
         Delay::new_at(Instant::now() + dur)
     }
@@ -41,6 +44,7 @@ impl Delay {
     ///
     /// The returned object will be bound to the default timer for this thread.
     /// The default timer will be spun up in a helper thread on first use.
+    #[inline]
     pub fn new_at(at: Instant) -> Delay {
         Delay::new_handle(at, Default::default())
     }
@@ -52,12 +56,17 @@ impl Delay {
     pub fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
-            None => return Delay { state: None, when: at },
+            None => {
+                return Delay {
+                    state: None,
+                    when: at,
+                }
+            }
         };
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
             state: AtomicUsize::new(0),
-            task: AtomicTask::new(),
+            waker: AtomicWaker::new(),
             inner: handle.inner,
             slot: Mutex::new(None),
         }));
@@ -66,10 +75,13 @@ impl Delay {
         // timer, meaning that we'll want to immediately return an error from
         // `poll`.
         if inner.list.push(&state).is_err() {
-            return Delay { state: None, when: at }
+            return Delay {
+                state: None,
+                when: at,
+            };
         }
 
-        inner.task.notify();
+        inner.waker.wake();
         Delay {
             state: Some(state),
             when: at,
@@ -80,6 +92,7 @@ impl Delay {
     /// specified by `dur`.
     ///
     /// This is equivalent to calling `reset_at` with `Instant::now() + dur`
+    #[inline]
     pub fn reset(&mut self, dur: Duration) {
         self.reset_at(Instant::now() + dur)
     }
@@ -97,6 +110,7 @@ impl Delay {
     /// Note that if any task is currently blocked on this future then that task
     /// will be dropped. It is required to call `poll` again after this method
     /// has been called to ensure tha ta task is blocked on this future.
+    #[inline]
     pub fn reset_at(&mut self, at: Instant) {
         self.when = at;
         if self._reset(at).is_err() {
@@ -114,7 +128,7 @@ impl Delay {
             loop {
                 // If we've been invalidated, cancel this reset
                 if bits & 0b10 != 0 {
-                    return Err(())
+                    return Err(());
                 }
                 let new = bits.wrapping_add(0b100) & !0b11;
                 match state.state.compare_exchange(bits, new, SeqCst, SeqCst) {
@@ -126,41 +140,46 @@ impl Delay {
             // If we fail to push our node then we've become an inert timer, so
             // we'll want to clear our `state` field accordingly
             timeouts.list.push(state)?;
-            timeouts.task.notify();
+            timeouts.waker.wake();
         }
 
         Ok(())
     }
 }
 
+#[inline]
 pub fn fires_at(timeout: &Delay) -> Instant {
     timeout.when
 }
 
 impl Future for Delay {
-    type Item = ();
-    type Error = io::Error;
+    type Output = io::Result<()>;
 
-    fn poll(&mut self) -> Poll<(), io::Error> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let state = match self.state {
             Some(ref state) => state,
-            None => return Err(io::Error::new(io::ErrorKind::Other,
-                                              "timer has gone away")),
+            None => {
+                let err = Err(io::Error::new(io::ErrorKind::Other, "timer has gone away"));
+                return Poll::Ready(err);
+            }
         };
+
         if state.state.load(SeqCst) & 1 != 0 {
-            return Ok(Async::Ready(()))
+            return Poll::Ready(Ok(()));
         }
 
-        state.task.register();
+        state.waker.register(&cx.waker());
 
         // Now that we've registered, do the full check of our own internal
         // state. If we've fired the first bit is set, and if we've been
         // invalidated the second bit is set.
         match state.state.load(SeqCst) {
-            n if n & 0b01 != 0 => Ok(Async::Ready(())),
-            n if n & 0b10 != 0 => Err(io::Error::new(io::ErrorKind::Other,
-                                                     "timer has gone away")),
-            _ => Ok(Async::NotReady),
+            n if n & 0b01 != 0 => Poll::Ready(Ok(())),
+            n if n & 0b10 != 0 => Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::Other,
+                "timer has gone away",
+            ))),
+            _ => Poll::Pending,
         }
     }
 }
@@ -174,7 +193,7 @@ impl Drop for Delay {
         if let Some(timeouts) = state.inner.upgrade() {
             *state.at.lock().unwrap() = None;
             if timeouts.list.push(state).is_ok() {
-                timeouts.task.notify();
+                timeouts.waker.wake();
             }
         }
     }
