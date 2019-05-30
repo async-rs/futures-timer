@@ -30,7 +30,7 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// # #![feature(async_await)]
     /// use std::time::Duration;
     /// use futures::prelude::*;
-    /// use futures_timer::FutureExt;
+    /// use futures_timer::TryFutureExt;
     ///
     /// # fn long_future() -> impl TryFuture<Ok = (), Error = std::io::Error> {
     /// #     futures::future::ok(())
