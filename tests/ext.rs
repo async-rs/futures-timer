@@ -8,9 +8,8 @@ use std::thread;
 
 use futures::future::poll_fn;
 use futures::channel::mpsc::*;
-use futures_timer::Delay;
-use futures_timer::{FutureTimerExt, StreamTimerExt};
-use futures::TryStreamExt;
+use futures_timer::*;
+use futures::TryStreamExt as TryStreamExt03;
 
 type TestResult = io::Result<()>;
 

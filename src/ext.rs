@@ -12,7 +12,7 @@ use crate::Delay;
 
 /// An extension trait for futures which provides convenient accessors for
 /// timing out execution and such.
-pub trait FutureTimerExt: TryFuture + Sized {
+pub trait TryFutureExt: TryFuture + Sized {
     /// Creates a new future which will take at most `dur` time to resolve from
     /// the point at which this method is called.
     ///
@@ -30,7 +30,7 @@ pub trait FutureTimerExt: TryFuture + Sized {
     /// # #![feature(async_await)]
     /// use std::time::Duration;
     /// use futures::prelude::*;
-    /// use futures_timer::FutureTimerExt;
+    /// use futures_timer::FutureExt;
     ///
     /// # fn long_future() -> impl TryFuture<Ok = (), Error = std::io::Error> {
     /// #     futures::future::ok(())
@@ -74,7 +74,7 @@ pub trait FutureTimerExt: TryFuture + Sized {
     }
 }
 
-impl<F: TryFuture> FutureTimerExt for F {}
+impl<F: TryFuture> TryFutureExt for F {}
 
 /// Future returned by the `FutureExt::timeout` method.
 pub struct Timeout<F>
@@ -119,7 +119,7 @@ where
 
 /// An extension trait for streams which provides convenient accessors for
 /// timing out execution and such.
-pub trait StreamTimerExt: TryStream + Sized {
+pub trait TryStreamExt: TryStream + Sized {
     /// Creates a new stream which will take at most `dur` time to yield each
     /// item of the stream.
     ///
@@ -143,7 +143,7 @@ pub trait StreamTimerExt: TryStream + Sized {
     }
 }
 
-impl<S: TryStream> StreamTimerExt for S {}
+impl<S: TryStream> TryStreamExt for S {}
 
 /// Stream returned by the `StreamExt::timeout` method.
 pub struct TimeoutStream<S>
