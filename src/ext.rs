@@ -1,5 +1,6 @@
 //! Extension traits for the standard `Stream` and `Future` traits.
 
+use std::fmt;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -117,6 +118,19 @@ where
     }
 }
 
+impl<F> fmt::Debug for Timeout<F>
+where
+    F: TryFuture,
+    F::Error: From<io::Error>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("Timeout")
+            .field("timeout", &self.timeout)
+            .field("future", &"...")
+            .finish()
+    }
+}
+
 /// An extension trait for streams which provides convenient accessors for
 /// timing out execution and such.
 pub trait StreamExt: TryStream + Sized {
@@ -198,5 +212,19 @@ where
         } else {
             Poll::Pending
         }
+    }
+}
+
+impl<F> fmt::Debug for TimeoutStream<F>
+where
+    F: TryStream,
+    F::Error: From<io::Error>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("TimeoutStream")
+            .field("timeout", &self.timeout)
+            .field("duration", &self.dur)
+            .field("future", &"...")
+            .finish()
     }
 }
