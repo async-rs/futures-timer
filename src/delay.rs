@@ -3,6 +3,7 @@
 //! This module contains the `Delay` type which is a future that will resolve
 //! at a particular point in the future.
 
+use std::fmt;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
@@ -196,5 +197,11 @@ impl Drop for Delay {
                 timeouts.waker.wake();
             }
         }
+    }
+}
+
+impl fmt::Debug for Delay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("Delay").field("when", &self.when).finish()
     }
 }

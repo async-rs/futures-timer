@@ -1,4 +1,5 @@
 use pin_utils::unsafe_pinned;
+use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
@@ -68,6 +69,15 @@ impl Stream for Interval {
         let next = next_interval(delay::fires_at(&self.delay), Instant::now(), self.interval);
         self.delay.reset_at(next);
         Poll::Ready(Some(()))
+    }
+}
+
+impl fmt::Debug for Interval {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("Interval")
+            .field("delay", &self.delay)
+            .field("interval", &self.interval)
+            .finish()
     }
 }
 
