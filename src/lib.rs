@@ -61,6 +61,7 @@
 //! is firing a timer (which invovles removing from the heap).
 
 #![deny(missing_docs)]
+#![warn(missing_debug_implementations)]
 
 use std::cmp::Ordering;
 use std::mem;
@@ -70,6 +71,7 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
 use std::time::Instant;
+use std::fmt;
 
 use futures::prelude::*;
 use futures::task::AtomicWaker;
@@ -290,6 +292,12 @@ impl Drop for Timer {
     }
 }
 
+impl fmt::Debug for Timer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("Timer").field("heap", &"...").finish()
+    }
+}
+
 impl PartialEq for HeapTimer {
     fn eq(&self, other: &HeapTimer) -> bool {
         self.at == other.at
@@ -402,5 +410,11 @@ impl Default for TimerHandle {
             drop(handle.into_usize());
             return ret;
         }
+    }
+}
+
+impl fmt::Debug for TimerHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("TimerHandle").field("inner", &"...").finish()
     }
 }
