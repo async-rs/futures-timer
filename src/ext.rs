@@ -77,6 +77,7 @@ pub trait FutureExt: TryFuture + Sized {
 impl<F: TryFuture> FutureExt for F {}
 
 /// Future returned by the `FutureExt::timeout` method.
+#[derive(Debug)]
 pub struct Timeout<F>
 where
     F: TryFuture,
@@ -146,6 +147,7 @@ pub trait StreamExt: TryStream + Sized {
 impl<S: TryStream> StreamExt for S {}
 
 /// Stream returned by the `StreamExt::timeout` method.
+#[derive(Debug)]
 pub struct TimeoutStream<S>
 where
     S: TryStream,

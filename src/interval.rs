@@ -17,6 +17,7 @@ use crate::{Delay, TimerHandle};
 /// Note that intervals are not intended for high resolution timers, but rather
 /// they will likely fire some granularity after the exact instant that they're
 /// otherwise indicated to fire at.
+#[derive(Debug)]
 pub struct Interval {
     delay: Delay,
     interval: Duration,
