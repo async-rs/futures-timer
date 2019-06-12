@@ -119,8 +119,10 @@ pub struct TimerHandle {
 }
 
 mod delay;
+mod error;
 mod interval;
 pub use self::delay::Delay;
+pub use self::error::Error;
 pub use self::interval::Interval;
 
 struct Inner {

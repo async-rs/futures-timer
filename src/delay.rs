@@ -5,7 +5,6 @@
 
 use std::fmt;
 use std::future::Future;
-use std::io;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
@@ -16,7 +15,7 @@ use std::time::{Duration, Instant};
 use futures::task::AtomicWaker;
 
 use crate::arc_list::Node;
-use crate::{ScheduledTimer, TimerHandle};
+use crate::{Error, ScheduledTimer, TimerHandle};
 
 /// A future representing the notification that an elapsed duration has
 /// occurred.
@@ -154,14 +153,13 @@ pub fn fires_at(timeout: &Delay) -> Instant {
 }
 
 impl Future for Delay {
-    type Output = io::Result<()>;
+    type Output = Result<(), Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let state = match self.state {
             Some(ref state) => state,
             None => {
-                let err = Err(io::Error::new(io::ErrorKind::Other, "timer has gone away"));
-                return Poll::Ready(err);
+                return Poll::Ready(Err(Error::new_timer_dropped()));
             }
         };
 
@@ -176,10 +174,7 @@ impl Future for Delay {
         // invalidated the second bit is set.
         match state.state.load(SeqCst) {
             n if n & 0b01 != 0 => Poll::Ready(Ok(())),
-            n if n & 0b10 != 0 => Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "timer has gone away",
-            ))),
+            n if n & 0b10 != 0 => Poll::Ready(Err(Error::new_timer_dropped())),
             _ => Poll::Pending,
         }
     }

@@ -1,6 +1,5 @@
 #![feature(async_await)]
 
-use std::error::Error;
 use std::io;
 use std::time::Duration;
 use std::task::Poll;
@@ -8,43 +7,42 @@ use std::thread;
 
 use futures::future::poll_fn;
 use futures::channel::mpsc::*;
-use futures_timer::*;
+use futures_timer::{*, ext::TimeoutError};
 use futures::TryStreamExt as TryStreamExt03;
 
-type TestResult = io::Result<()>;
+type TestResult = ::std::result::Result<(), TimeoutError<()>>;
 
 #[runtime::test]
 async fn future_timeout() -> TestResult {
     // Never completes
-    let long_future = poll_fn::<TestResult, _>(|_| {
+    let long_future = poll_fn::<Result<(), ()>, _>(|_| {
         Poll::Pending
     });
 
     let res = long_future.timeout(Duration::from_millis(100)).await;
-    assert_eq!("future timed out", res.unwrap_err().description());
+    assert!(res.unwrap_err().is_elapsed());
     Ok(())
 }
 
 #[runtime::test]
 async fn future_doesnt_timeout() -> TestResult {
     // Never completes
-    let short_future = futures::future::ready::<TestResult>(Ok(()));
+    let short_future = futures::future::ready(Ok(()));
     short_future.timeout(Duration::from_millis(100)).await?;
     Ok(())
 }
 
 #[runtime::test]
-async fn stream() -> TestResult {
-
-    let dur = Duration::from_millis(10);
-    Delay::new(dur).await?;
-    Delay::new(dur).await?;
+async fn future_error() -> TestResult {
+    let error_future = futures::future::ready(Err::<(), _>(()));
+    let res = error_future.timeout(Duration::from_millis(100)).await;
+    assert!(res.unwrap_err().is_inner());
     Ok(())
 }
 
 #[runtime::test]
 async fn stream_timeout() -> TestResult {
-    let (mut tx, rx) = unbounded::<io::Result<u8>>();
+    let (mut tx, rx) = unbounded::<Result<u8, ()>>();
 
     thread::spawn(move || {
         for i in 0..10_u8 {
@@ -103,5 +101,15 @@ async fn stream_doesnt_timeout() -> TestResult {
 
     assert_eq!(count, 10);
 
+    Ok(())
+}
+
+#[runtime::test]
+async fn stream_error() -> TestResult {
+    let mut error_stream =
+        futures::stream::repeat(Err::<(), _>(())).timeout(Duration::from_millis(100));
+
+    let res = error_stream.try_next().await;
+    assert!(res.unwrap_err().is_inner());
     Ok(())
 }

@@ -75,6 +75,5 @@ async fn drop_timer_wakes() {
         Poll::Pending
     });
 
-    let res = f.await;
-    assert_eq!("timer has gone away", res.unwrap_err().description());
+    assert!(f.await.is_err());
 }
