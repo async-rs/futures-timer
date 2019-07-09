@@ -83,7 +83,7 @@ mod global;
 mod heap;
 
 pub mod ext;
-pub use ext::{TryFutureExt, TryStreamExt};
+pub use ext::{FutureExt, StreamExt, TimedOut};
 
 /// A "timer heap" used to power separately owned instances of `Delay` and
 /// `Interval`.

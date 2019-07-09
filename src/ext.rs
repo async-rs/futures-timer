@@ -1,6 +1,5 @@
 //! Extension traits for the standard `Stream` and `Future` traits.
 
-use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
@@ -10,9 +9,13 @@ use pin_utils::unsafe_pinned;
 
 use crate::Delay;
 
+/// The error returned by a timed out future or stream.
+#[derive(Debug)]
+pub struct TimedOut(());
+
 /// An extension trait for futures which provides convenient accessors for
-/// timing out execution and such.
-pub trait TryFutureExt: TryFuture + Sized {
+/// timing out execution.
+pub trait FutureExt: Future + Sized {
     /// Creates a new future which will take at most `dur` time to resolve from
     /// the point at which this method is called.
     ///
@@ -29,10 +32,10 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// ```no_run
     /// use std::time::Duration;
     /// use futures::prelude::*;
-    /// use futures_timer::TryFutureExt;
+    /// use futures_timer::FutureExt;
     ///
-    /// # fn long_future() -> impl TryFuture<Ok = (), Error = std::io::Error> {
-    /// #     futures::future::ok(())
+    /// # fn long_future() -> impl Future<Output = ()> {
+    /// #     futures::future::ready(())
     /// # }
     /// #
     /// #[runtime::main]
@@ -46,10 +49,7 @@ pub trait TryFutureExt: TryFuture + Sized {
     ///     }
     /// }
     /// ```
-    fn timeout(self, dur: Duration) -> Timeout<Self>
-    where
-        Self::Error: From<io::Error>,
-    {
+    fn timeout(self, dur: Duration) -> Timeout<Self> {
         Timeout {
             timeout: Delay::new(dur),
             future: self,
@@ -62,10 +62,7 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// it tweaks the moment at when the timeout elapsed to being specified with
     /// an absolute value rather than a relative one. For more documentation see
     /// the `timeout` method.
-    fn timeout_at(self, at: Instant) -> Timeout<Self>
-    where
-        Self::Error: From<io::Error>,
-    {
+    fn timeout_at(self, at: Instant) -> Timeout<Self> {
         Timeout {
             timeout: Delay::new_at(at),
             future: self,
@@ -73,14 +70,13 @@ pub trait TryFutureExt: TryFuture + Sized {
     }
 }
 
-impl<F: TryFuture> TryFutureExt for F {}
+impl<F: Future> FutureExt for F {}
 
 /// Future returned by the `FutureExt::timeout` method.
 #[derive(Debug)]
 pub struct Timeout<F>
 where
-    F: TryFuture,
-    F::Error: From<io::Error>,
+    F: Future,
 {
     future: F,
     timeout: Delay,
@@ -88,8 +84,7 @@ where
 
 impl<F> Timeout<F>
 where
-    F: TryFuture,
-    F::Error: From<io::Error>,
+    F: Future,
 {
     unsafe_pinned!(future: F);
     unsafe_pinned!(timeout: Delay);
@@ -97,20 +92,20 @@ where
 
 impl<F> Future for Timeout<F>
 where
-    F: TryFuture,
-    F::Error: From<io::Error>,
+    F: Future,
 {
-    type Output = Result<F::Ok, F::Error>;
+    type Output = Result<F::Output, TimedOut>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.as_mut().future().try_poll(cx) {
+        match self.as_mut().future().poll(cx) {
+            Poll::Ready(inner) => {
+                return Poll::Ready(Ok(inner));
+            }
             Poll::Pending => {}
-            other => return other,
         }
 
         if self.timeout().poll(cx).is_ready() {
-            let err = Err(io::Error::new(io::ErrorKind::TimedOut, "future timed out").into());
-            Poll::Ready(err)
+            Poll::Ready(Err(TimedOut(())))
         } else {
             Poll::Pending
         }
@@ -119,7 +114,7 @@ where
 
 /// An extension trait for streams which provides convenient accessors for
 /// timing out execution and such.
-pub trait TryStreamExt: TryStream + Sized {
+pub trait StreamExt: Stream + Sized {
     /// Creates a new stream which will take at most `dur` time to yield each
     /// item of the stream.
     ///
@@ -131,10 +126,7 @@ pub trait TryStreamExt: TryStream + Sized {
     /// If a stream's item completes before `dur` elapses then the timer will be
     /// reset for the next item. If the timeout elapses, however, then an error
     /// will be yielded on the stream and the timer will be reset.
-    fn timeout(self, dur: Duration) -> TimeoutStream<Self>
-    where
-        Self::Error: From<io::Error>,
-    {
+    fn timeout(self, dur: Duration) -> TimeoutStream<Self> {
         TimeoutStream {
             timeout: Delay::new(dur),
             dur,
@@ -143,14 +135,13 @@ pub trait TryStreamExt: TryStream + Sized {
     }
 }
 
-impl<S: TryStream> TryStreamExt for S {}
+impl<S: Stream> StreamExt for S {}
 
 /// Stream returned by the `StreamExt::timeout` method.
 #[derive(Debug)]
 pub struct TimeoutStream<S>
 where
-    S: TryStream,
-    S::Error: From<io::Error>,
+    S: Stream,
 {
     timeout: Delay,
     dur: Duration,
@@ -159,8 +150,7 @@ where
 
 impl<S> TimeoutStream<S>
 where
-    S: TryStream,
-    S::Error: From<io::Error>,
+    S: Stream,
 {
     unsafe_pinned!(timeout: Delay);
     unsafe_pinned!(stream: S);
@@ -168,30 +158,24 @@ where
 
 impl<S> Stream for TimeoutStream<S>
 where
-    S: TryStream,
-    S::Error: From<io::Error>,
+    S: Stream,
 {
-    type Item = Result<S::Ok, S::Error>;
+    type Item = Result<S::Item, TimedOut>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let dur = self.dur;
 
-        let r = self.as_mut().stream().try_poll_next(cx);
-        match r {
-            Poll::Pending => {}
-            other => {
+        match self.as_mut().stream().poll_next(cx) {
+            Poll::Ready(inner) => {
                 self.as_mut().timeout().reset(dur);
-                return other;
+                return Poll::Ready(inner.map(Ok))
             }
+            Poll::Pending => {}
         }
 
         if self.as_mut().timeout().poll(cx).is_ready() {
             self.as_mut().timeout().reset(dur);
-            Poll::Ready(Some(Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "stream item timed out",
-            )
-            .into())))
+            Poll::Ready(Some(Err(TimedOut(()))))
         } else {
             Poll::Pending
         }
