@@ -167,18 +167,14 @@ where
     unsafe_pinned!(stream: S);
 }
 
-impl<S> TryStream for TimeoutStream<S>
+impl<S> Stream for TimeoutStream<S>
 where
     S: TryStream,
     S::Error: From<io::Error>,
 {
-    type Ok = S::Ok;
-    type Error = S::Error;
+    type Item = Result<S::Ok, S::Error>;
 
-    fn try_poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Ok, Self::Error>>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let dur = self.dur;
 
         let r = self.as_mut().stream().try_poll_next(cx);
