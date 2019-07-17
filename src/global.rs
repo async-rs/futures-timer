@@ -24,7 +24,9 @@ impl HelperThread {
         let timer_handle = timer.handle();
         let done = Arc::new(AtomicBool::new(false));
         let done2 = done.clone();
-        let thread = thread::Builder::new().spawn(move || run(timer, done2))?;
+        let thread = thread::Builder::new()
+            .name("futures-timer".to_owned())
+            .spawn(move || run(timer, done2))?;
 
         Ok(HelperThread {
             thread: Some(thread),
