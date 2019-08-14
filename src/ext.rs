@@ -96,7 +96,6 @@ where
 impl<F> Future for Timeout<F>
 where
     F: TryFuture,
-    F::Error: fmt::Debug,
 {
     type Output = Result<F::Ok, Waited<F::Error>>;
 
@@ -117,9 +116,7 @@ where
 
 /// Enum returned by a future with a timeout
 #[derive(Debug)]
-pub enum Waited<E> 
-where E: fmt::Debug
-{
+pub enum Waited<E> {
     /// Variant representing an a future which timed out before completion
     TimedOut,
 
@@ -127,37 +124,12 @@ where E: fmt::Debug
     InnerError(E),
 }
 
-impl<E> Waited<E> 
-where E: fmt::Debug
-{
+impl<E> Waited<E> {
     /// Consumes the Waited enum and returns the inner error (if any)
     pub fn into_inner(self) -> Option<E> {
         match self {
             Waited::TimedOut => None,
             Waited::InnerError(e) => Some(e),
-        }
-    }
-}
-
-use std::fmt;
-
-impl<E> fmt::Display for Waited<E> 
-where E: fmt::Debug{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Waited::TimedOut => write!(f,"Future timed out before completing"),
-            Waited::InnerError(e) => write!(f, "Future completed with an error: {:?}", e),
-        }
-     }
-}
-
-impl<E> std::error::Error for Waited<E> 
-where E: std::error::Error{
-
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Waited::TimedOut => None,
-            Waited::InnerError(e) => e.source(),
         }
     }
 }
@@ -195,7 +167,6 @@ impl<S: TryStream> TryStreamExt for S {}
 pub struct TimeoutStream<S>
 where
     S: TryStream,
-    S::Error: From<io::Error>,
 {
     timeout: Delay,
     dur: Duration,
@@ -205,7 +176,6 @@ where
 impl<S> TimeoutStream<S>
 where
     S: TryStream,
-    S::Error: From<io::Error>,
 {
     unsafe_pinned!(timeout: Delay);
     unsafe_pinned!(stream: S);
@@ -214,9 +184,8 @@ where
 impl<S> Stream for TimeoutStream<S>
 where
     S: TryStream,
-    S::Error: From<io::Error>,
 {
-    type Item = Result<S::Ok, S::Error>;
+    type Item = Result<S::Ok, Waited<S::Error>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let dur = self.dur;
@@ -224,19 +193,19 @@ where
         let r = self.as_mut().stream().try_poll_next(cx);
         match r {
             Poll::Pending => {}
-            other => {
+            Poll::Ready(Some(result)) => {
                 self.as_mut().timeout().reset(dur);
-                return other;
+                return Poll::Ready(Some(result.map_err(|e| Waited::InnerError(e))));
+            }
+            Poll::Ready(None) => {
+                self.as_mut().timeout().reset(dur);
+                return Poll::Ready(None);
             }
         }
 
         if self.as_mut().timeout().poll(cx).is_ready() {
             self.as_mut().timeout().reset(dur);
-            Poll::Ready(Some(Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "stream item timed out",
-            )
-            .into())))
+            Poll::Ready(Some(Err(Waited::TimedOut)))
         } else {
             Poll::Pending
         }
