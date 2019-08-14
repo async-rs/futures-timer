@@ -80,7 +80,6 @@ impl<F: TryFuture> TryFutureExt for F {}
 pub struct Timeout<F>
 where
     F: TryFuture,
-    F::Error: From<io::Error>,
 {
     future: F,
     timeout: Delay,
@@ -89,7 +88,6 @@ where
 impl<F> Timeout<F>
 where
     F: TryFuture,
-    F::Error: From<io::Error>,
 {
     unsafe_pinned!(future: F);
     unsafe_pinned!(timeout: Delay);
@@ -98,21 +96,68 @@ where
 impl<F> Future for Timeout<F>
 where
     F: TryFuture,
-    F::Error: From<io::Error>,
+    F::Error: fmt::Debug,
 {
-    type Output = Result<F::Ok, F::Error>;
+    type Output = Result<F::Ok, Waited<F::Error>>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.as_mut().future().try_poll(cx) {
             Poll::Pending => {}
-            other => return other,
+            other => return other.map_err(|e| Waited::InnerError(e)),
         }
 
         if self.timeout().poll(cx).is_ready() {
-            let err = Err(io::Error::new(io::ErrorKind::TimedOut, "future timed out").into());
+            let err = Err(Waited::TimedOut);
             Poll::Ready(err)
         } else {
             Poll::Pending
+        }
+    }
+}
+
+/// Enum returned by a future with a timeout
+#[derive(Debug)]
+pub enum Waited<E> 
+where E: fmt::Debug
+{
+    /// Variant representing an a future which timed out before completion
+    TimedOut,
+
+    /// indicates a future which failed to execute successfully (but did not time out)
+    InnerError(E),
+}
+
+impl<E> Waited<E> 
+where E: fmt::Debug
+{
+    /// Consumes the Waited enum and returns the inner error (if any)
+    pub fn into_inner(self) -> Option<E> {
+        match self {
+            Waited::TimedOut => None,
+            Waited::InnerError(e) => Some(e),
+        }
+    }
+}
+
+use std::fmt;
+
+impl<E> fmt::Display for Waited<E> 
+where E: fmt::Debug{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Waited::TimedOut => write!(f,"Future timed out before completing"),
+            Waited::InnerError(e) => write!(f, "Future completed with an error: {:?}", e),
+        }
+     }
+}
+
+impl<E> std::error::Error for Waited<E> 
+where E: std::error::Error{
+
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Waited::TimedOut => None,
+            Waited::InnerError(e) => e.source(),
         }
     }
 }
