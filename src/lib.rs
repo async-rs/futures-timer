@@ -147,7 +147,10 @@ struct ScheduledTimer {
 
     at: Mutex<Option<Instant>>,
 
-    // The index of the host (i.e. `HeapTimer`) in the timer_heap.
+    // The index of the host (i.e. `HeapTimer`) in the timer_heap. The slot won't need a
+    // lock due to its use's always tied to the `at` field, which will be locked for the duration
+    // of accessing and updating the `slot` field, hence guaranteeing the exclusive access and
+    // thread safety.
     slot: AtomicUsize,
 }
 
@@ -210,10 +213,10 @@ impl Timer {
             // Flag the timer as fired and then notify its task, if any, that's
             // blocked.
             if let Some(heap_timer) = self.timer_heap.pop() {
-                // reset the last timer, regardless of if it has a timer in it. We don't need a lock
-                // here to wait other concurrent access, since the heap timer has been removed from
-                // its `slot` in the timer heap, and since the host is removed, we shall just update
-                // the slot index to the empty.
+                // remove the last slot index. This is the only location where the lock has not been
+                // acquired for the `node`. Though we don't really need a lock here, since the heap
+                // timer has been removed from its `slot` in the timer heap, and since the host is
+                // removed, we shall just update the slot index to point to the empty.
                 heap_timer.node.slot.swap(0, Release);
 
                 let bits = heap_timer.gen << 2;

@@ -70,7 +70,7 @@ impl Delay {
             state: AtomicUsize::new(0),
             waker: AtomicWaker::new(),
             inner: handle.inner,
-            slot: AtomicUsize::new(0), //AtomicPtr::new(ptr::null_mut()), //Mutex::new(None),
+            slot: AtomicUsize::new(0),
         }));
 
         // If we fail to actually push our node then we've become an inert
