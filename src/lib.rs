@@ -66,7 +66,10 @@
 use std::cmp::Ordering;
 use std::mem;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, Weak, atomic::{AtomicUsize, Ordering::SeqCst, Ordering::AcqRel}};
+use std::sync::{
+    Arc, Mutex, Weak,
+    atomic::{AtomicUsize, Ordering::SeqCst, Ordering::Acquire, Ordering::Release}
+};
 use std::task::{Context, Poll};
 use std::time::Instant;
 use std::fmt;
@@ -144,6 +147,7 @@ struct ScheduledTimer {
 
     at: Mutex<Option<Instant>>,
 
+    // The index of the host (i.e. `HeapTimer`) in the timer_heap.
     slot: AtomicUsize,
 }
 
@@ -206,8 +210,11 @@ impl Timer {
             // Flag the timer as fired and then notify its task, if any, that's
             // blocked.
             if let Some(heap_timer) = self.timer_heap.pop() {
-                // reset the last timer, regardless of if it has a timer in it.
-                heap_timer.node.slot.swap(0, AcqRel);
+                // reset the last timer, regardless of if it has a timer in it. We don't need a lock
+                // here to wait other concurrent access, since the heap timer has been removed from
+                // its `slot` in the timer heap, and since the host is removed, we shall just update
+                // the slot index to the empty.
+                heap_timer.node.slot.swap(0, Release);
 
                 let bits = heap_timer.gen << 2;
                 if heap_timer
@@ -223,15 +230,16 @@ impl Timer {
     }
 
     /// Either updates the timer at slot `idx` to fire at `at`, or adds a new
-    /// timer at `idx` and sets it to fire at `at`.
+    /// timer at `idx` and sets it to fire at `at`. This function is only accessed from
+    /// the timer's `poll` call, where the `at` field is locked for exclusive access to the
+    /// `node`. Hence we're actually running synchronized code on `node`.
     fn update_or_add(&mut self, at: Instant, node: Arc<Node<ScheduledTimer>>) {
-        // TODO: avoid remove + push and instead just do one sift of the heap?
-        // In theory we could update it in place and then do the percolation
-        // as necessary
+        ///TODO: Avoid remove + push and instead just do one sift of the heap?  In theory we could
+        /// update it in place and then do the percolation as necessary
 
         // If this slot's `idx` is still around and it still points a registered timer,
         // then we jettison it form the timer heap.
-        self.remove_slot(&node.slot);
+        self.cleanup(&node.slot);
 
         // push the new timer and obtain the index of the timer in the heap.
         let next: usize =
@@ -244,17 +252,19 @@ impl Timer {
                 .into();
 
         // always shift the index by 1, such that 0 will be a unique position for empty slot.
-        node.slot.store(next + 1, SeqCst);
+        node.slot.store(next + 1, Release);
     }
 
+    /// This function is only accessed from the timer's `poll` call, where the `at` field is locked
+    /// for exclusive access to the `node`. Hence we're actually running synchronized code on `node`.
     fn remove(&mut self, node: Arc<Node<ScheduledTimer>>) {
-        // If this `idx` is still around and it's still got a registered timer,
+        // If this `idx` is still around and it's still attached to a registered timer,
         // then we jettison it form the timer heap.
-        self.remove_slot(&node.slot);
+        self.cleanup(&node.slot);
     }
 
-    fn remove_slot(&mut self, slot: &AtomicUsize) {
-        let last: usize = slot.load(AcqRel);
+    fn cleanup(&mut self, slot: &AtomicUsize) {
+        let last: usize = slot.load(Acquire);
         if last > 0 {
             self.timer_heap.remove(Slot::from(last - 1));
         }
