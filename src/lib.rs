@@ -65,9 +65,9 @@
 
 use std::cmp::Ordering;
 use std::mem;
+use std::sync::atomic::{AtomicUsize, AtomicPtr, Ordering::SeqCst, Ordering::AcqRel};
 use std::pin::Pin;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering::SeqCst;
+use std::ptr;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
 use std::time::Instant;
@@ -120,6 +120,7 @@ pub struct TimerHandle {
 
 mod delay;
 mod interval;
+
 pub use self::delay::Delay;
 pub use self::interval::Interval;
 
@@ -142,11 +143,20 @@ struct ScheduledTimer {
     state: AtomicUsize,
 
     inner: Weak<Inner>,
+
     at: Mutex<Option<Instant>>,
 
-    // TODO: this is only accessed by the timer thread, should have a more
-    // lightweight protection than a `Mutex`
-    slot: Mutex<Option<Slot>>,
+    slot: AtomicPtr<Slot>, // Mutex<Option<Slot>>,
+}
+
+impl Drop for ScheduledTimer {
+    fn drop(&mut self) {
+        let raw = self.slot.get_mut();
+
+        if !raw.is_null() {
+            unsafe { ptr::drop_in_place(*raw); }
+        }
+    }
 }
 
 /// Entries in the timer heap, sorted by the instant they're firing at and then
@@ -185,7 +195,7 @@ impl Timer {
         self.timer_heap.peek().map(|t| t.at)
     }
 
-    /// Proces any timers which are supposed to fire at or before the current
+    /// Process any timers which are supposed to fire at or before the current
     /// instant.
     ///
     /// This method is equivalent to `self.advance_to(Instant::now())`.
@@ -193,7 +203,7 @@ impl Timer {
         self.advance_to(Instant::now())
     }
 
-    /// Proces any timers which are supposed to fire before `now` specified.
+    /// Process any timers which are supposed to fire before `now` specified.
     ///
     /// This method should be called on `Timer` periodically to advance the
     /// internal state and process any pending timers which need to fire.
@@ -208,15 +218,18 @@ impl Timer {
             // Flag the timer as fired and then notify its task, if any, that's
             // blocked.
             let heap_timer = self.timer_heap.pop().unwrap();
-            *heap_timer.node.slot.lock().unwrap() = None;
+
+            // *heap_timer.node.slot.lock().unwrap() = None;
+            heap_timer.node.slot.swap(ptr::null_mut(), AcqRel);
+
             let bits = heap_timer.gen << 2;
-            match heap_timer
+            if heap_timer
                 .node
                 .state
                 .compare_exchange(bits, bits | 0b01, SeqCst, SeqCst)
+                .is_ok()
             {
-                Ok(_) => heap_timer.node.waker.wake(),
-                Err(_b) => {}
+                heap_timer.node.waker.wake();
             }
         }
     }
@@ -228,26 +241,36 @@ impl Timer {
         // In theory we could update it in place and then do the percolation
         // as necessary
         let gen = node.state.load(SeqCst) >> 2;
-        let mut slot = node.slot.lock().unwrap();
-        if let Some(heap_slot) = slot.take() {
-            self.timer_heap.remove(heap_slot);
+
+       let next_slot = Box::into_raw(Box::new(
+            self.timer_heap.push(HeapTimer {
+                at,
+                gen,
+                node: node.clone()
+            })
+        ));
+
+        let raw = node.slot.swap(next_slot, SeqCst);
+
+        if !raw.is_null() {
+            self.timer_heap.remove(unsafe {
+                ptr::read(raw)
+            });
         }
-        *slot = Some(self.timer_heap.push(HeapTimer {
-            at: at,
-            gen: gen,
-            node: node.clone(),
-        }));
     }
 
     fn remove(&mut self, node: Arc<Node<ScheduledTimer>>) {
         // If this `idx` is still around and it's still got a registered timer,
         // then we jettison it form the timer heap.
-        let mut slot = node.slot.lock().unwrap();
-        let heap_slot = match slot.take() {
-            Some(slot) => slot,
-            None => return,
-        };
-        self.timer_heap.remove(heap_slot);
+
+        let raw = node.slot.swap(ptr::null_mut(), SeqCst);
+        if raw.is_null() {
+            return;
+        }
+
+        self.timer_heap.remove(unsafe {
+            ptr::read(raw)
+        });
     }
 
     fn invalidate(&mut self, node: Arc<Node<ScheduledTimer>>) {
@@ -365,7 +388,7 @@ impl TimerHandle {
     }
 
     unsafe fn from_usize(val: usize) -> TimerHandle {
-        let inner = mem::transmute::<usize, Weak<Inner>>(val);;
+        let inner = mem::transmute::<usize, Weak<Inner>>(val);
         TimerHandle { inner }
     }
 }
@@ -404,11 +427,12 @@ impl Default for TimerHandle {
         // its value to reify a handle, clone it, and then forget our reified
         // handle as we don't actually have an owning reference to it.
         assert!(fallback != 0);
+
         unsafe {
             let handle = TimerHandle::from_usize(fallback);
             let ret = handle.clone();
             drop(handle.into_usize());
-            return ret;
+            ret
         }
     }
 }
