@@ -8,7 +8,6 @@
 //! Basic usage of this crate is relatively simple:
 //!
 //! ```no_run
-//! # #![feature(async_await)]
 //! # #[runtime::main]
 //! # async fn main() {
 //! use std::time::Duration;

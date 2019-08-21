@@ -27,7 +27,6 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// # Examples
     ///
     /// ```no_run
-    /// # #![feature(async_await)]
     /// use std::time::Duration;
     /// use futures::prelude::*;
     /// use futures_timer::TryFutureExt;
