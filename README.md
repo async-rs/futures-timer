@@ -10,7 +10,7 @@ crate.
 ```toml
 # Cargo.toml
 [dependencies]
-futures-timer = "0.1"
+futures-timer = "0.3"
 ```
 
 An example of using a `Delay` is:
