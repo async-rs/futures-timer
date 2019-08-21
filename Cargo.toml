@@ -17,4 +17,8 @@ futures-preview = "0.3.0-alpha.16"
 pin-utils = "0.1.0-alpha.4"
 
 [dev-dependencies]
-runtime = "0.3.0-alpha.4"
+runtime = "0.3.0-alpha.6"
+
+[patch.crates-io.runtime]
+git = "https://github.com/rustasync/runtime"
+rev = "6177e6ead4f1a5fd23640db5d931d85b2dd55c5d"
