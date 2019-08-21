@@ -1,6 +1,6 @@
 # futures-timer
 
-[![Build Status](https://api.travis-ci.com/rustasync/futures-timer.svg?branch=master)](https://travis-ci.org/rustasync/futures-timer)
+[![Build Status](https://api.travis-ci.com/rustasync/futures-timer.svg?branch=master)](https://travis-ci.com/rustasync/futures-timer)
 
 [Documentation](https://docs.rs/futures-timer)
 
