@@ -364,7 +364,7 @@ impl TimerHandle {
     }
 
     unsafe fn from_usize(val: usize) -> TimerHandle {
-        let inner = mem::transmute::<usize, Weak<Inner>>(val);;
+        let inner = mem::transmute::<usize, Weak<Inner>>(val);
         TimerHandle { inner }
     }
 }
