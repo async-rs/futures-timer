@@ -65,10 +65,8 @@
 
 use std::cmp::Ordering;
 use std::mem;
-use std::sync::atomic::{AtomicUsize, AtomicPtr, Ordering::SeqCst, Ordering::AcqRel};
 use std::pin::Pin;
-use std::ptr;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, Weak, atomic::{AtomicUsize, Ordering::SeqCst, Ordering::AcqRel}};
 use std::task::{Context, Poll};
 use std::time::Instant;
 use std::fmt;
@@ -146,17 +144,7 @@ struct ScheduledTimer {
 
     at: Mutex<Option<Instant>>,
 
-    slot: AtomicPtr<Slot>, // Mutex<Option<Slot>>,
-}
-
-impl Drop for ScheduledTimer {
-    fn drop(&mut self) {
-        let raw = self.slot.get_mut();
-
-        if !raw.is_null() {
-            unsafe { ptr::drop_in_place(*raw); }
-        }
-    }
+    slot: AtomicUsize,
 }
 
 /// Entries in the timer heap, sorted by the instant they're firing at and then
@@ -217,19 +205,19 @@ impl Timer {
 
             // Flag the timer as fired and then notify its task, if any, that's
             // blocked.
-            let heap_timer = self.timer_heap.pop().unwrap();
+            if let Some(heap_timer) = self.timer_heap.pop() {
+                // reset the last timer, regardless of if it has a timer in it.
+                heap_timer.node.slot.swap(0, AcqRel);
 
-            // *heap_timer.node.slot.lock().unwrap() = None;
-            heap_timer.node.slot.swap(ptr::null_mut(), AcqRel);
-
-            let bits = heap_timer.gen << 2;
-            if heap_timer
-                .node
-                .state
-                .compare_exchange(bits, bits | 0b01, SeqCst, SeqCst)
-                .is_ok()
-            {
-                heap_timer.node.waker.wake();
+                let bits = heap_timer.gen << 2;
+                if heap_timer
+                    .node
+                    .state
+                    .compare_exchange(bits, bits | 0b01, SeqCst, SeqCst)
+                    .is_ok()
+                {
+                    heap_timer.node.waker.wake();
+                }
             }
         }
     }
@@ -240,37 +228,36 @@ impl Timer {
         // TODO: avoid remove + push and instead just do one sift of the heap?
         // In theory we could update it in place and then do the percolation
         // as necessary
-        let gen = node.state.load(SeqCst) >> 2;
 
-       let next_slot = Box::into_raw(Box::new(
-            self.timer_heap.push(HeapTimer {
-                at,
-                gen,
-                node: node.clone()
-            })
-        ));
+        // If this slot's `idx` is still around and it still points a registered timer,
+        // then we jettison it form the timer heap.
+        self.remove_slot(&node.slot);
 
-        let raw = node.slot.swap(next_slot, SeqCst);
+        // push the new timer and obtain the index of the timer in the heap.
+        let next: usize =
+            self.timer_heap
+                .push(HeapTimer {
+                    at,
+                    gen: node.state.load(SeqCst) >> 2,
+                    node: node.clone()
+                })
+                .into();
 
-        if !raw.is_null() {
-            self.timer_heap.remove(unsafe {
-                ptr::read(raw)
-            });
-        }
+        // always shift the index by 1, such that 0 will be a unique position for empty slot.
+        node.slot.store(next + 1, SeqCst);
     }
 
     fn remove(&mut self, node: Arc<Node<ScheduledTimer>>) {
         // If this `idx` is still around and it's still got a registered timer,
         // then we jettison it form the timer heap.
+        self.remove_slot(&node.slot);
+    }
 
-        let raw = node.slot.swap(ptr::null_mut(), SeqCst);
-        if raw.is_null() {
-            return;
+    fn remove_slot(&mut self, slot: &AtomicUsize) {
+        let last: usize = slot.load(AcqRel);
+        if last > 0 {
+            self.timer_heap.remove(Slot::from(last - 1));
         }
-
-        self.timer_heap.remove(unsafe {
-            ptr::read(raw)
-        });
     }
 
     fn invalidate(&mut self, node: Arc<Node<ScheduledTimer>>) {
@@ -284,14 +271,24 @@ impl Future for Timer {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Pin::new(&mut self.inner).waker.register(cx.waker());
+
         let mut list = self.inner.list.take();
         while let Some(node) = list.pop() {
+            // Note: both `update_or_add` and `remove` are only accessed in this scope and hence,
+            //       thread-safe if node is pre-locked (no one else could have access to the
+            //       underlying data.
+
             let at = *node.at.lock().unwrap();
+
             match at {
                 Some(at) => self.update_or_add(at, node),
                 None => self.remove(node),
             }
+
+            // Note: the lock on `at` field only drops here, and hence protecting the `update_or_add`
+            //       and `remove` calls
         }
+
         Poll::Pending
     }
 }

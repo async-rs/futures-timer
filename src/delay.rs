@@ -7,8 +7,7 @@ use std::fmt;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
-use std::ptr;
-use std::sync::atomic::{AtomicUsize, AtomicPtr};
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
@@ -71,7 +70,7 @@ impl Delay {
             state: AtomicUsize::new(0),
             waker: AtomicWaker::new(),
             inner: handle.inner,
-            slot: AtomicPtr::new(ptr::null_mut()), //Mutex::new(None),
+            slot: AtomicUsize::new(0), //AtomicPtr::new(ptr::null_mut()), //Mutex::new(None),
         }));
 
         // If we fail to actually push our node then we've become an inert

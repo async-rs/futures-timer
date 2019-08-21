@@ -26,8 +26,21 @@ enum SlabSlot<T> {
     Full { value: T },
 }
 
+#[derive(Debug)]
 pub struct Slot {
     idx: usize,
+}
+
+impl From<usize> for Slot {
+    fn from(idx: usize) -> Self {
+        Slot { idx }
+    }
+}
+
+impl Into<usize> for Slot {
+    fn into(self) -> usize {
+        self.idx
+    }
 }
 
 impl<T: Ord> Heap<T> {
@@ -46,8 +59,10 @@ impl<T: Ord> Heap<T> {
     /// heap, but only if the element was previously not removed from the heap.
     pub fn push(&mut self, t: T) -> Slot {
         self.assert_consistent();
+
         let len = self.items.len();
         let slot = SlabSlot::Full { value: len };
+
         let slot_idx = if self.next_index == self.index.len() {
             self.next_index += 1;
             self.index.push(slot);
@@ -58,9 +73,12 @@ impl<T: Ord> Heap<T> {
                 SlabSlot::Full { .. } => panic!(),
             }
         };
+
         self.items.push((t, slot_idx));
         self.percolate_up(len);
+
         self.assert_consistent();
+
         Slot { idx: slot_idx }
     }
 
@@ -71,37 +89,48 @@ impl<T: Ord> Heap<T> {
 
     pub fn pop(&mut self) -> Option<T> {
         self.assert_consistent();
-        if self.items.len() == 0 {
+
+        if self.items.is_empty() {
             return None;
         }
+
         let slot = Slot {
             idx: self.items[0].1,
         };
+
         Some(self.remove(slot))
     }
 
     pub fn remove(&mut self, slot: Slot) -> T {
         self.assert_consistent();
+
         let empty = SlabSlot::Empty {
             next: self.next_index,
         };
+
         let idx = match mem::replace(&mut self.index[slot.idx], empty) {
             SlabSlot::Full { value } => value,
             SlabSlot::Empty { .. } => panic!(),
         };
+
         self.next_index = slot.idx;
         let (item, slot_idx) = self.items.swap_remove(idx);
+
         debug_assert_eq!(slot.idx, slot_idx);
+
         if idx < self.items.len() {
             set_index(&mut self.index, self.items[idx].1, idx);
+
             if self.items[idx].0 < item {
                 self.percolate_up(idx);
             } else {
                 self.percolate_down(idx);
             }
         }
+
         self.assert_consistent();
-        return item;
+
+        item
     }
 
     fn percolate_up(&mut self, mut idx: usize) -> usize {
@@ -116,7 +145,8 @@ impl<T: Ord> Heap<T> {
             set_index(&mut self.index, b[0].1, idx);
             idx = parent;
         }
-        return idx;
+
+        idx
     }
 
     fn percolate_down(&mut self, mut idx: usize) -> usize {
@@ -157,7 +187,7 @@ impl<T: Ord> Heap<T> {
             set_index(&mut self.index, b[0].1, a.len());
             idx = a.len();
         }
-        return idx;
+        idx
     }
 
     fn assert_consistent(&self) {
