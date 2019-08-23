@@ -8,7 +8,6 @@
 //! Basic usage of this crate is relatively simple:
 //!
 //! ```no_run
-//! # #![feature(async_await)]
 //! # #[runtime::main]
 //! # async fn main() {
 //! use std::time::Duration;
@@ -365,7 +364,7 @@ impl TimerHandle {
     }
 
     unsafe fn from_usize(val: usize) -> TimerHandle {
-        let inner = mem::transmute::<usize, Weak<Inner>>(val);;
+        let inner = mem::transmute::<usize, Weak<Inner>>(val);
         TimerHandle { inner }
     }
 }

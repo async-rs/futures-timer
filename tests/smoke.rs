@@ -1,4 +1,3 @@
-#![feature(async_await)]
 use std::time::{Duration, Instant};
 
 use futures::future::poll_fn;
