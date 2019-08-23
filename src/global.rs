@@ -57,8 +57,8 @@ impl Drop for HelperThread {
 }
 
 fn run(timer: Timer, done: Arc<AtomicBool>) {
-    let mut waker = current_thread_waker();
-    let mut cx = Context::from_waker(&mut waker);
+    let waker = current_thread_waker();
+    let mut cx = Context::from_waker(&waker);
 
     pin_mut!(timer);
     while !done.load(Ordering::SeqCst) {

@@ -47,8 +47,6 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// }
     /// ```
     fn timeout(self, dur: Duration) -> Timeout<Self>
-    where
-        Self::Error: From<io::Error>,
     {
         Timeout {
             timeout: Delay::new(dur),
@@ -63,8 +61,6 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// an absolute value rather than a relative one. For more documentation see
     /// the `timeout` method.
     fn timeout_at(self, at: Instant) -> Timeout<Self>
-    where
-        Self::Error: From<io::Error>,
     {
         Timeout {
             timeout: Delay::new_at(at),
@@ -149,8 +145,6 @@ pub trait TryStreamExt: TryStream + Sized {
     /// reset for the next item. If the timeout elapses, however, then an error
     /// will be yielded on the stream and the timer will be reset.
     fn timeout(self, dur: Duration) -> TimeoutStream<Self>
-    where
-        Self::Error: From<io::Error>,
     {
         TimeoutStream {
             timeout: Delay::new(dur),
@@ -195,7 +189,7 @@ where
             Poll::Pending => {}
             Poll::Ready(Some(result)) => {
                 self.as_mut().timeout().reset(dur);
-                return Poll::Ready(Some(result.map_err(|e| Waited::InnerError(e))));
+                return Poll::Ready(Some(result.map_err(Waited::InnerError)));
             }
             Poll::Ready(None) => {
                 self.as_mut().timeout().reset(dur);
