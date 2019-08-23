@@ -2,9 +2,9 @@
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::future::Future;
 use std::time::{Duration, Instant};
-
-use futures::prelude::*;
+use futures::{TryFuture, TryStream, Stream};
 use pin_utils::unsafe_pinned;
 
 use crate::Delay;
