@@ -1,11 +1,12 @@
 //! Extension traits for the standard `Stream` and `Future` traits.
 
+use futures::{Stream, TryFuture, TryStream};
+use pin_utils::unsafe_pinned;
+use std::fmt;
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::future::Future;
 use std::time::{Duration, Instant};
-use futures::{TryFuture, TryStream, Stream};
-use pin_utils::unsafe_pinned;
 
 use crate::Delay;
 
@@ -45,8 +46,7 @@ pub trait TryFutureExt: TryFuture + Sized {
     ///     }
     /// }
     /// ```
-    fn timeout(self, dur: Duration) -> Timeout<Self>
-    {
+    fn timeout(self, dur: Duration) -> Timeout<Self> {
         Timeout {
             timeout: Delay::new(dur),
             future: self,
@@ -59,8 +59,7 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// it tweaks the moment at when the timeout elapsed to being specified with
     /// an absolute value rather than a relative one. For more documentation see
     /// the `timeout` method.
-    fn timeout_at(self, at: Instant) -> Timeout<Self>
-    {
+    fn timeout_at(self, at: Instant) -> Timeout<Self> {
         Timeout {
             timeout: Delay::new_at(at),
             future: self,
@@ -129,6 +128,20 @@ impl<E> Waited<E> {
     }
 }
 
+impl<E> fmt::Display for Waited<E>
+where
+    E: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Waited::TimedOut => write!(f, "future timed out"),
+            Waited::InnerError(e) => write!(f, "inner future error: {}", e),
+        }
+    }
+}
+
+impl<E> std::error::Error for Waited<E> where E: std::error::Error {}
+
 /// An extension trait for streams which provides convenient accessors for
 /// timing out execution and such.
 pub trait TryStreamExt: TryStream + Sized {
@@ -143,8 +156,7 @@ pub trait TryStreamExt: TryStream + Sized {
     /// If a stream's item completes before `dur` elapses then the timer will be
     /// reset for the next item. If the timeout elapses, however, then an error
     /// will be yielded on the stream and the timer will be reset.
-    fn timeout(self, dur: Duration) -> TimeoutStream<Self>
-    {
+    fn timeout(self, dur: Duration) -> TimeoutStream<Self> {
         TimeoutStream {
             timeout: Delay::new(dur),
             dur,

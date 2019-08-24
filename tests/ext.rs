@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::io;
 use std::task::Poll;
 use std::thread;
@@ -9,31 +8,39 @@ use futures::future::poll_fn;
 use futures::TryStreamExt as TryStreamExt03;
 use futures_timer::*;
 
-type TestResult = io::Result<()>;
+type TestResult = Result<(), ()>;
 
 #[runtime::test]
 async fn future_timeout() -> TestResult {
     // Never completes
     let long_future = poll_fn::<TestResult, _>(|_| Poll::Pending);
 
-    let res = long_future.timeout(Duration::from_millis(100)).await;
-    assert_eq!("future timed out", res.unwrap_err().description());
-    Ok(())
+    match long_future
+        .timeout(Duration::from_millis(100))
+        .await
+        .unwrap_err()
+    {
+        Waited::TimedOut => Ok(()),
+        _ => panic!(),
+    }
 }
 
 #[runtime::test]
 async fn future_doesnt_timeout() -> TestResult {
     // Never completes
     let short_future = futures::future::ready::<TestResult>(Ok(()));
-    short_future.timeout(Duration::from_millis(100)).await?;
+    short_future
+        .timeout(Duration::from_millis(100))
+        .await
+        .unwrap();
     Ok(())
 }
 
 #[runtime::test]
 async fn stream() -> TestResult {
     let dur = Duration::from_millis(10);
-    Delay::new(dur).await?;
-    Delay::new(dur).await?;
+    Delay::new(dur).await.unwrap();
+    Delay::new(dur).await.unwrap();
     Ok(())
 }
 
