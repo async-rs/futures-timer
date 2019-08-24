@@ -96,7 +96,7 @@ where
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.as_mut().future().try_poll(cx) {
             Poll::Pending => {}
-            other => return other.map_err(|e| Waited::InnerError(e)),
+            other => return other.map_err(Waited::InnerError),
         }
 
         if self.timeout().poll(cx).is_ready() {

@@ -116,7 +116,7 @@ impl<T: Ord> Heap<T> {
             set_index(&mut self.index, b[0].1, idx);
             idx = parent;
         }
-        return idx;
+        idx
     }
 
     fn percolate_down(&mut self, mut idx: usize) -> usize {

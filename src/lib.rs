@@ -156,6 +156,12 @@ struct HeapTimer {
     node: Arc<Node<ScheduledTimer>>,
 }
 
+impl Default for Timer {
+    fn default() -> Self {
+        Timer::new()
+    }
+}
+
 impl Timer {
     /// Creates a new timer heap ready to create new timers.
     pub fn new() -> Timer {
@@ -232,8 +238,8 @@ impl Timer {
             self.timer_heap.remove(heap_slot);
         }
         *slot = Some(self.timer_heap.push(HeapTimer {
-            at: at,
-            gen: gen,
+            at,
+            gen,
             node: node.clone(),
         }));
     }
@@ -407,7 +413,7 @@ impl Default for TimerHandle {
             let handle = TimerHandle::from_usize(fallback);
             let ret = handle.clone();
             drop(handle.into_usize());
-            return ret;
+            ret
         }
     }
 }
