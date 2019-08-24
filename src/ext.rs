@@ -2,6 +2,7 @@
 
 use futures::{Stream, TryFuture, TryStream};
 use pin_utils::unsafe_pinned;
+use std::error::Error;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
@@ -140,7 +141,17 @@ where
     }
 }
 
-impl<E> std::error::Error for Waited<E> where E: std::error::Error {}
+impl<E> Error for Waited<E>
+where
+    E: Error,
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Waited::TimedOut => None,
+            Waited::InnerError(e) => e.source(),
+        }
+    }
+}
 
 /// An extension trait for streams which provides convenient accessors for
 /// timing out execution and such.
