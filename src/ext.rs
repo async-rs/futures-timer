@@ -30,7 +30,7 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// ```no_run
     /// use std::time::Duration;
     /// use futures::prelude::*;
-    /// use futures_timer::TryFutureExt;
+    /// use futures_timer::{TryFutureExt, Waited};
     ///
     /// # fn long_future() -> impl TryFuture<Ok = (), Error = std::io::Error> {
     /// #     futures::future::ok(())
@@ -43,7 +43,8 @@ pub trait TryFutureExt: TryFuture + Sized {
     ///
     ///     match timed_out.await {
     ///         Ok(item) => println!("got {:?} within enough time!", item),
-    ///         Err(_) => println!("took too long to produce the item"),
+    ///         Err(Waited::TimedOut) => println!("took too long to produce the item"),
+    ///         Err(Waited::InnerError(e)) => println!("something else went wrong!: {}", e),
     ///     }
     /// }
     /// ```
@@ -115,7 +116,7 @@ pub enum Waited<E> {
     /// Variant representing an a future which timed out before completion
     TimedOut,
 
-    /// indicates a future which failed to execute successfully (but did not time out)
+    /// Indicates a future which failed to execute successfully (but did not time out)
     InnerError(E),
 }
 
@@ -126,6 +127,11 @@ impl<E> Waited<E> {
             Waited::TimedOut => None,
             Waited::InnerError(e) => Some(e),
         }
+    }
+
+    /// Consumes the Waited enum and unwraps the inner error
+    pub fn unwrap(self) -> E {
+        self.into_inner().unwrap()
     }
 }
 
