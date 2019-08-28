@@ -113,7 +113,7 @@ impl<T> Node<T> {
         Node {
             next: AtomicUsize::new(0),
             enqueued: AtomicBool::new(false),
-            data: data,
+            data,
         }
     }
 }

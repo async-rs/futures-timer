@@ -5,7 +5,7 @@ matrix:
   include:
     # - rust: stable
     # - rust: beta
-    - rust: nightly
+    - rust: nightly-2019-08-21
       before_script:
         - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
       after_success:
@@ -15,6 +15,11 @@ matrix:
       script:
         - rustup component add rustfmt
         - cargo fmt -- --check
+    - name: cargo clippy
+      rust: nightly-2019-08-21
+      script:
+        - rustup component add clippy
+        - cargo clippy --all-features -- -Dwarnings
 
 script:
   - cargo build
