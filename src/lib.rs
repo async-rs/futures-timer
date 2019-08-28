@@ -63,6 +63,7 @@
 #![warn(missing_debug_implementations)]
 
 use std::cmp::Ordering;
+use std::fmt;
 use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
@@ -70,7 +71,6 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
 use std::time::Instant;
-use std::fmt;
 
 use futures::prelude::*;
 use futures::task::AtomicWaker;
@@ -414,6 +414,8 @@ impl Default for TimerHandle {
 
 impl fmt::Debug for TimerHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.debug_struct("TimerHandle").field("inner", &"...").finish()
+        f.debug_struct("TimerHandle")
+            .field("inner", &"...")
+            .finish()
     }
 }

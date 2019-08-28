@@ -10,6 +10,11 @@ matrix:
         - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
       after_success:
         - travis-cargo doc-upload
+    - name: cargo fmt
+      rust: stable
+      script:
+        - rustup component add rustfmt
+        - cargo fmt -- --check
 
 script:
   - cargo build
