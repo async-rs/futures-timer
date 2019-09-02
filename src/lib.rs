@@ -412,7 +412,7 @@ impl Default for TimerHandle {
         unsafe {
             let handle = TimerHandle::from_usize(fallback);
             let ret = handle.clone();
-            drop(handle.into_usize());
+            let _ = handle.into_usize();
             ret
         }
     }

@@ -89,22 +89,21 @@ fn duration_to_nanos(dur: Duration) -> Option<u64> {
 fn next_interval(prev: Instant, now: Instant, interval: Duration) -> Instant {
     let new = prev + interval;
     if new > now {
-        new
-    } else {
-        let spent_ns =
-            duration_to_nanos(now.duration_since(prev)).expect("interval should be expired");
-        let interval_ns =
-            duration_to_nanos(interval).expect("interval is less that 427 thousand years");
-        let mult = spent_ns / interval_ns + 1;
-        assert!(
-            mult < (1 << 32),
-            "can't skip more than 4 billion intervals of {:?} \
-             (trying to skip {})",
-            interval,
-            mult
-        );
-        prev + interval * (mult as u32)
+        return new;
     }
+
+    let spent_ns = duration_to_nanos(now.duration_since(prev)).expect("interval should be expired");
+    let interval_ns =
+        duration_to_nanos(interval).expect("interval is less that 427 thousand years");
+    let mult = spent_ns / interval_ns + 1;
+    assert!(
+        mult < (1 << 32),
+        "can't skip more than 4 billion intervals of {:?} \
+         (trying to skip {})",
+        interval,
+        mult
+    );
+    prev + interval * (mult as u32)
 }
 
 #[cfg(test)]

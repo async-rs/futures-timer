@@ -62,7 +62,7 @@ fn run(timer: Timer, done: Arc<AtomicBool>) {
 
     pin_mut!(timer);
     while !done.load(Ordering::SeqCst) {
-        drop(timer.as_mut().poll(&mut cx));
+        let _ = timer.as_mut().poll(&mut cx);
 
         timer.advance();
         match timer.next_event() {
