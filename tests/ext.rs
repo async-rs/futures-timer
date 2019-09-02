@@ -20,7 +20,7 @@ async fn future_timeout() -> TestResult {
         .await
         .unwrap_err()
     {
-        Waited::TimedOut => Ok(()),
+        TimeoutError::TimedOut => Ok(()),
         _ => panic!(),
     }
 }

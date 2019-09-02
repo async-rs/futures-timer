@@ -30,7 +30,7 @@ pub trait TryFutureExt: TryFuture + Sized {
     /// ```no_run
     /// use std::time::Duration;
     /// use futures::prelude::*;
-    /// use futures_timer::{TryFutureExt, Waited};
+    /// use futures_timer::{TryFutureExt, TimeoutError};
     ///
     /// # fn long_future() -> impl TryFuture<Ok = (), Error = std::io::Error> {
     /// #     futures::future::ok(())
@@ -43,8 +43,8 @@ pub trait TryFutureExt: TryFuture + Sized {
     ///
     ///     match timed_out.await {
     ///         Ok(item) => println!("got {:?} within enough time!", item),
-    ///         Err(Waited::TimedOut) => println!("took too long to produce the item"),
-    ///         Err(Waited::InnerError(e)) => println!("something else went wrong!: {}", e),
+    ///         Err(TimeoutError::TimedOut) => println!("took too long to produce the item"),
+    ///         Err(TimeoutError::InnerError(e)) => println!("something else went wrong!: {}", e),
     ///     }
     /// }
     /// ```
@@ -93,16 +93,16 @@ impl<F> Future for Timeout<F>
 where
     F: TryFuture,
 {
-    type Output = Result<F::Ok, Waited<F::Error>>;
+    type Output = Result<F::Ok, TimeoutError<F::Error>>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.as_mut().future().try_poll(cx) {
             Poll::Pending => {}
-            other => return other.map_err(Waited::InnerError),
+            other => return other.map_err(TimeoutError::InnerError),
         }
 
         if self.timeout().poll(cx).is_ready() {
-            let err = Err(Waited::TimedOut);
+            let err = Err(TimeoutError::TimedOut);
             Poll::Ready(err)
         } else {
             Poll::Pending
@@ -112,7 +112,7 @@ where
 
 /// Enum returned by a future with a timeout
 #[derive(Debug)]
-pub enum Waited<E> {
+pub enum TimeoutError<E> {
     /// Variant representing an a future which timed out before completion
     TimedOut,
 
@@ -120,41 +120,41 @@ pub enum Waited<E> {
     InnerError(E),
 }
 
-impl<E> Waited<E> {
-    /// Consumes the Waited enum and returns the inner error (if any)
+impl<E> TimeoutError<E> {
+    /// Consumes the TimeoutError enum and returns the inner error (if any)
     pub fn into_inner(self) -> Option<E> {
         match self {
-            Waited::TimedOut => None,
-            Waited::InnerError(e) => Some(e),
+            TimeoutError::TimedOut => None,
+            TimeoutError::InnerError(e) => Some(e),
         }
     }
 
-    /// Consumes the Waited enum and unwraps the inner error
+    /// Consumes the TimeoutError enum and unwraps the inner error
     pub fn unwrap(self) -> E {
         self.into_inner().unwrap()
     }
 }
 
-impl<E> fmt::Display for Waited<E>
+impl<E> fmt::Display for TimeoutError<E>
 where
     E: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Waited::TimedOut => write!(f, "future timed out"),
-            Waited::InnerError(e) => write!(f, "inner future error: {}", e),
+            TimeoutError::TimedOut => write!(f, "future timed out"),
+            TimeoutError::InnerError(e) => write!(f, "inner future error: {}", e),
         }
     }
 }
 
-impl<E> Error for Waited<E>
+impl<E> Error for TimeoutError<E>
 where
     E: Error,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Waited::TimedOut => None,
-            Waited::InnerError(e) => e.source(),
+            TimeoutError::TimedOut => None,
+            TimeoutError::InnerError(e) => e.source(),
         }
     }
 }
@@ -207,7 +207,7 @@ impl<S> Stream for TimeoutStream<S>
 where
     S: TryStream,
 {
-    type Item = Result<S::Ok, Waited<S::Error>>;
+    type Item = Result<S::Ok, TimeoutError<S::Error>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let dur = self.dur;
@@ -217,7 +217,7 @@ where
             Poll::Pending => {}
             Poll::Ready(Some(result)) => {
                 self.as_mut().timeout().reset(dur);
-                return Poll::Ready(Some(result.map_err(Waited::InnerError)));
+                return Poll::Ready(Some(result.map_err(TimeoutError::InnerError)));
             }
             Poll::Ready(None) => {
                 self.as_mut().timeout().reset(dur);
@@ -227,7 +227,7 @@ where
 
         if self.as_mut().timeout().poll(cx).is_ready() {
             self.as_mut().timeout().reset(dur);
-            Poll::Ready(Some(Err(Waited::TimedOut)))
+            Poll::Ready(Some(Err(TimeoutError::TimedOut)))
         } else {
             Poll::Pending
         }
