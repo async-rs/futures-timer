@@ -63,6 +63,7 @@
 #![warn(missing_debug_implementations)]
 
 use std::cmp::Ordering;
+use std::fmt;
 use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
@@ -70,7 +71,6 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
 use std::time::Instant;
-use std::fmt;
 
 use futures::prelude::*;
 use futures::task::AtomicWaker;
@@ -232,8 +232,8 @@ impl Timer {
             self.timer_heap.remove(heap_slot);
         }
         *slot = Some(self.timer_heap.push(HeapTimer {
-            at: at,
-            gen: gen,
+            at,
+            gen,
             node: node.clone(),
         }));
     }
@@ -294,6 +294,12 @@ impl Drop for Timer {
 impl fmt::Debug for Timer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         f.debug_struct("Timer").field("heap", &"...").finish()
+    }
+}
+
+impl Default for Timer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -406,14 +412,16 @@ impl Default for TimerHandle {
         unsafe {
             let handle = TimerHandle::from_usize(fallback);
             let ret = handle.clone();
-            drop(handle.into_usize());
-            return ret;
+            let _ = handle.into_usize();
+            ret
         }
     }
 }
 
 impl fmt::Debug for TimerHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.debug_struct("TimerHandle").field("inner", &"...").finish()
+        f.debug_struct("TimerHandle")
+            .field("inner", &"...")
+            .finish()
     }
 }

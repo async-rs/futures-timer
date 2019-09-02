@@ -71,7 +71,7 @@ impl<T: Ord> Heap<T> {
 
     pub fn pop(&mut self) -> Option<T> {
         self.assert_consistent();
-        if self.items.len() == 0 {
+        if self.items.is_empty() {
             return None;
         }
         let slot = Slot {
@@ -101,7 +101,7 @@ impl<T: Ord> Heap<T> {
             }
         }
         self.assert_consistent();
-        return item;
+        item
     }
 
     fn percolate_up(&mut self, mut idx: usize) -> usize {
@@ -116,7 +116,7 @@ impl<T: Ord> Heap<T> {
             set_index(&mut self.index, b[0].1, idx);
             idx = parent;
         }
-        return idx;
+        idx
     }
 
     fn percolate_down(&mut self, mut idx: usize) -> usize {
@@ -157,7 +157,7 @@ impl<T: Ord> Heap<T> {
             set_index(&mut self.index, b[0].1, a.len());
             idx = a.len();
         }
-        return idx;
+        idx
     }
 
     fn assert_consistent(&self) {
