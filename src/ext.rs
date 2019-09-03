@@ -113,7 +113,7 @@ where
 /// Enum returned by a future with a timeout
 #[derive(Debug)]
 pub enum TimeoutError<E> {
-    /// Variant representing an a future which timed out before completion
+    /// Variant representing a future which timed out before completion
     TimedOut,
 
     /// Indicates a future which failed to execute successfully (but did not time out)
