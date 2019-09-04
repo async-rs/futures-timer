@@ -236,8 +236,8 @@ impl Timer {
     /// the timer's `poll` call, where the `at` field is locked for exclusive access to the
     /// `node`. Hence we're actually running synchronized code on `node`.
     fn update_or_add(&mut self, at: Instant, node: Arc<Node<ScheduledTimer>>) {
-        /// TODO: Avoid remove + push and instead just do one sift of the heap?  In theory we could
-        /// update it in place and then do the percolation as necessary
+        // TODO: Avoid remove + push and instead just do one sift of the heap?  In theory we could
+        // update it in place and then do the percolation as necessary
 
         // If this slot's `idx` is still around and it still points a registered timer,
         // then we jettison it form the timer heap.
