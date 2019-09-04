@@ -8,7 +8,6 @@
 //! Basic usage of this crate is relatively simple:
 //!
 //! ```no_run
-//! # #![feature(async_await)]
 //! # #[runtime::main]
 //! # async fn main() {
 //! use std::time::Duration;
@@ -64,6 +63,7 @@
 #![warn(missing_debug_implementations)]
 
 use std::cmp::Ordering;
+use std::fmt;
 use std::mem;
 use std::pin::Pin;
 use std::sync::{
@@ -72,7 +72,6 @@ use std::sync::{
 };
 use std::task::{Context, Poll};
 use std::time::Instant;
-use std::fmt;
 
 use futures::prelude::*;
 use futures::task::AtomicWaker;
@@ -331,6 +330,12 @@ impl fmt::Debug for Timer {
     }
 }
 
+impl Default for Timer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PartialEq for HeapTimer {
     fn eq(&self, other: &HeapTimer) -> bool {
         self.at == other.at
@@ -449,6 +454,8 @@ impl Default for TimerHandle {
 
 impl fmt::Debug for TimerHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.debug_struct("TimerHandle").field("inner", &"...").finish()
+        f.debug_struct("TimerHandle")
+            .field("inner", &"...")
+            .finish()
     }
 }

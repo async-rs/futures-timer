@@ -89,7 +89,7 @@ impl<T: Ord> Heap<T> {
 
     pub fn pop(&mut self) -> Option<T> {
         self.assert_consistent();
-
+      
         if self.items.is_empty() {
             return None;
         }
@@ -129,7 +129,7 @@ impl<T: Ord> Heap<T> {
         }
 
         self.assert_consistent();
-
+      
         item
     }
 
@@ -145,7 +145,7 @@ impl<T: Ord> Heap<T> {
             set_index(&mut self.index, b[0].1, idx);
             idx = parent;
         }
-
+      
         idx
     }
 
