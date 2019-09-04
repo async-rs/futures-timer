@@ -67,8 +67,8 @@ use std::fmt;
 use std::mem;
 use std::pin::Pin;
 use std::sync::{
+    atomic::{AtomicUsize, Ordering::Acquire, Ordering::Release, Ordering::SeqCst},
     Arc, Mutex, Weak,
-    atomic::{AtomicUsize, Ordering::SeqCst, Ordering::Acquire, Ordering::Release}
 };
 use std::task::{Context, Poll};
 use std::time::Instant;
@@ -244,14 +244,14 @@ impl Timer {
         self.cleanup(&node.slot);
 
         // push the new timer and obtain the index of the timer in the heap.
-        let next: usize =
-            self.timer_heap
-                .push(HeapTimer {
-                    at,
-                    gen: node.state.load(SeqCst) >> 2,
-                    node: node.clone()
-                })
-                .into();
+        let next: usize = self
+            .timer_heap
+            .push(HeapTimer {
+                at,
+                gen: node.state.load(SeqCst) >> 2,
+                node: node.clone(),
+            })
+            .into();
 
         // always shift the index by 1, such that 0 will be a unique position for empty slot.
         node.slot.store(next + 1, Release);
@@ -446,7 +446,7 @@ impl Default for TimerHandle {
         unsafe {
             let handle = TimerHandle::from_usize(fallback);
             let ret = handle.clone();
-            drop(handle.into_usize());
+            let _ = handle.into_usize();
             ret
         }
     }
