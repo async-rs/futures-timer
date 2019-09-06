@@ -1,9 +1,10 @@
-use pin_utils::unsafe_pinned;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::prelude::*;
+use futures_core::future::Future;
+use futures_core::stream::Stream;
+use pin_utils::unsafe_pinned;
 
 use crate::delay;
 use crate::{Delay, TimerHandle};

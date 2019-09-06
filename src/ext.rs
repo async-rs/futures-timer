@@ -5,7 +5,8 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::prelude::*;
+use futures_core::future::{Future, TryFuture};
+use futures_core::stream::{Stream, TryStream};
 use pin_utils::unsafe_pinned;
 
 use crate::Delay;
