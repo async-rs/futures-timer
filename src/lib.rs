@@ -72,8 +72,8 @@ use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
 use std::time::Instant;
 
-use futures::prelude::*;
-use futures::task::AtomicWaker;
+use futures_core::future::Future;
+use futures_util::task::AtomicWaker;
 
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};

@@ -1,6 +1,6 @@
 [package]
 name = "futures-timer"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
@@ -13,8 +13,10 @@ Timeouts and intervals for futures.
 """
 
 [dependencies]
-futures-preview = "0.3.0-alpha.18"
+futures-core-preview = "0.3.0-alpha.18"
+futures-util-preview = "0.3.0-alpha.18"
 pin-utils = "0.1.0-alpha.4"
 
 [dev-dependencies]
+futures-preview = "0.3.0-alpha.18"
 runtime = "0.3.0-alpha.7"

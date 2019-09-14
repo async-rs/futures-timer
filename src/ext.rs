@@ -1,13 +1,14 @@
 //! Extension traits for the standard `Stream` and `Future` traits.
 
-use futures::{Stream, TryFuture, TryStream};
-use pin_utils::unsafe_pinned;
 use std::error::Error;
 use std::fmt;
-use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
+
+use futures_core::future::{Future, TryFuture};
+use futures_core::stream::{Stream, TryStream};
+use pin_utils::unsafe_pinned;
 
 use crate::Delay;
 

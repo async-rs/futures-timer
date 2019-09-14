@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::task::AtomicWaker;
+use futures_util::task::AtomicWaker;
 
 use crate::arc_list::Node;
 use crate::{ScheduledTimer, TimerHandle};
