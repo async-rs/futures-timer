@@ -13,10 +13,10 @@ Timeouts and intervals for futures.
 """
 
 [dependencies]
-futures-core-preview = "0.3.0-alpha.18"
-futures-util-preview = "0.3.0-alpha.18"
+futures-core-preview = "0.3.0-alpha.19"
+futures-util-preview = "0.3.0-alpha.19"
 pin-utils = "0.1.0-alpha.4"
 
 [dev-dependencies]
-futures-preview = "0.3.0-alpha.18"
+futures-preview = "0.3.0-alpha.19"
 runtime = "0.3.0-alpha.7"
