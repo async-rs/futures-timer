@@ -41,6 +41,12 @@ impl Delay {
         Delay::new_handle(Instant::now() + dur, Default::default())
     }
 
+    /// Return the `Instant` when this delay will fire.
+    #[inline]
+    pub fn when(&self, timeout: &Delay) -> Instant {
+        timeout.when
+    }
+
     /// Creates a new future which will fire at the time specified by `at`.
     ///
     /// The returned instance of `Delay` will be bound to the timer specified by
