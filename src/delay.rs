@@ -87,20 +87,9 @@ impl Delay {
 
     /// Resets this timeout to an new timeout which will fire at the time
     /// specified by `at`.
-    ///
-    /// This method is usable even of this instance of `Delay` has "already
-    /// fired". That is, if this future has resovled, calling this method means
-    /// that the future will still re-resolve at the specified instant.
-    ///
-    /// If `at` is in the past then this future will immediately be resolved
-    /// (when `poll` is called).
-    ///
-    /// Note that if any task is currently blocked on this future then that task
-    /// will be dropped. It is required to call `poll` again after this method
-    /// has been called to ensure tha ta task is blocked on this future.
     #[inline]
-    pub fn reset(&mut self, dur: Duration) {
-        self.when = Instant::now() + dur;
+    pub fn reset(&mut self, at: Instant) {
+        self.when = at;
         if self._reset(self.when).is_err() {
             self.state = None
         }
