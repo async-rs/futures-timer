@@ -38,22 +38,20 @@ impl Delay {
     /// The default timer will be spun up in a helper thread on first use.
     #[inline]
     pub fn new(dur: Duration) -> Delay {
-        Delay::new_at(Instant::now() + dur)
+        Delay::new_handle(Instant::now() + dur, Default::default())
     }
 
-    /// Creates a new future which will fire at the time specified by `at`.
-    ///
-    /// The returned object will be bound to the default timer for this thread.
-    /// The default timer will be spun up in a helper thread on first use.
+    /// Return the `Instant` when this delay will fire.
     #[inline]
-    pub fn new_at(at: Instant) -> Delay {
-        Delay::new_handle(at, Default::default())
+    pub fn when(&self, timeout: &Delay) -> Instant {
+        timeout.when
     }
 
     /// Creates a new future which will fire at the time specified by `at`.
     ///
     /// The returned instance of `Delay` will be bound to the timer specified by
     /// the `handle` argument.
+    #[doc(hidden)]
     pub fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
@@ -90,15 +88,6 @@ impl Delay {
     }
 
     /// Resets this timeout to an new timeout which will fire at the time
-    /// specified by `dur`.
-    ///
-    /// This is equivalent to calling `reset_at` with `Instant::now() + dur`
-    #[inline]
-    pub fn reset(&mut self, dur: Duration) {
-        self.reset_at(Instant::now() + dur)
-    }
-
-    /// Resets this timeout to an new timeout which will fire at the time
     /// specified by `at`.
     ///
     /// This method is usable even of this instance of `Delay` has "already
@@ -112,9 +101,9 @@ impl Delay {
     /// will be dropped. It is required to call `poll` again after this method
     /// has been called to ensure tha ta task is blocked on this future.
     #[inline]
-    pub fn reset_at(&mut self, at: Instant) {
-        self.when = at;
-        if self._reset(at).is_err() {
+    pub fn reset(&mut self, dur: Duration) {
+        self.when = Instant::now() + dur;
+        if self._reset(self.when).is_err() {
             self.state = None
         }
     }
@@ -146,11 +135,6 @@ impl Delay {
 
         Ok(())
     }
-}
-
-#[inline]
-pub fn fires_at(timeout: &Delay) -> Instant {
-    timeout.when
 }
 
 impl Future for Delay {
