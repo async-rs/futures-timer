@@ -5,7 +5,6 @@
 
 use std::fmt;
 use std::future::Future;
-use std::io;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
@@ -51,8 +50,7 @@ impl Delay {
     ///
     /// The returned instance of `Delay` will be bound to the timer specified by
     /// the `handle` argument.
-    #[doc(hidden)]
-    pub fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
+    pub(crate) fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
             None => {
@@ -138,19 +136,16 @@ impl Delay {
 }
 
 impl Future for Delay {
-    type Output = io::Result<()>;
+    type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let state = match self.state {
             Some(ref state) => state,
-            None => {
-                let err = Err(io::Error::new(io::ErrorKind::Other, "timer has gone away"));
-                return Poll::Ready(err);
-            }
+            None => panic!("timer has gone away"),
         };
 
         if state.state.load(SeqCst) & 1 != 0 {
-            return Poll::Ready(Ok(()));
+            return Poll::Ready(());
         }
 
         state.waker.register(&cx.waker());
@@ -159,11 +154,8 @@ impl Future for Delay {
         // state. If we've fired the first bit is set, and if we've been
         // invalidated the second bit is set.
         match state.state.load(SeqCst) {
-            n if n & 0b01 != 0 => Poll::Ready(Ok(())),
-            n if n & 0b10 != 0 => Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "timer has gone away",
-            ))),
+            n if n & 0b01 != 0 => Poll::Ready(()),
+            n if n & 0b10 != 0 => panic!("timer has gone away"),
             _ => Poll::Pending,
         }
     }

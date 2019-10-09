@@ -27,9 +27,6 @@ mod timer;
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
 use heap_timer::HeapTimer;
-use timer::{ScheduledTimer, TimerHandle};
-
-#[doc(hidden)]
-pub use timer::Timer;
+use timer::{ScheduledTimer, Timer, TimerHandle};
 
 pub use self::delay::Delay;
