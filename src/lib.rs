@@ -1,9 +1,6 @@
 //! A general purpose crate for working with timeouts and delays with futures.
 //!
-//! This crate is intended to provide general purpose timeouts and interval
-//! streams for working with `futures`.
-//!
-//! Basic usage of this crate is relatively simple:
+//! # Examples
 //!
 //! ```no_run
 //! # #[runtime::main]
@@ -16,8 +13,6 @@
 //! println!("waited for 3 secs");
 //! # }
 //! ```
-//!
-//! And you're off to the races!
 
 #![deny(missing_docs)]
 #![warn(missing_debug_implementations)]
@@ -32,6 +27,9 @@ mod timer;
 use arc_list::{ArcList, Node};
 use heap::{Heap, Slot};
 use heap_timer::HeapTimer;
-use timer::{ScheduledTimer, Timer, TimerHandle};
+use timer::{ScheduledTimer, TimerHandle};
+
+#[doc(hidden)]
+pub use timer::Timer;
 
 pub use self::delay::Delay;
