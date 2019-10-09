@@ -19,29 +19,13 @@
 //! # }
 //! ```
 //!
-//! In addition to a one-shot future you can also create a stream of delayed
-//! notifications with the `Interval` type:
-//!
-//! ```no_run
-//! # fn main() {
-//! use std::time::Duration;
-//! use futures_timer::Interval;
-//! use futures::prelude::*;
-//!
-//! let dur = Duration::from_secs(4);
-//! let stream = Interval::new(dur)
-//!     .map(|()| println!("prints every four seconds"));
-//! // spawn or use the stream
-//! # }
-//! ```
-//!
 //! And you're off to the races! Check out the API documentation for more
-//! details about the various methods on `Delay` and `Interval`.
+//! details about the various methods on `Delay`.
 //!
 //! # Implementation details
 //!
-//! The `Delay` and `Interval` types are powered by an associated `Timer`. By
-//! default constructors like `Delay::new` and `Interval::new` use a global
+//! The `Delay` type is powered by an associated `Timer`. By
+//! default constructors like `Delay::new` use a global
 //! instance of `Timer` to power their usage. This global `Timer` is spawned
 //! onto a helper thread which continuously runs in the background sending out
 //! timer notifications.
@@ -82,11 +66,7 @@ mod arc_list;
 mod global;
 mod heap;
 
-pub mod ext;
-pub use ext::{TryFutureExt, TryStreamExt};
-
-/// A "timer heap" used to power separately owned instances of `Delay` and
-/// `Interval`.
+/// A "timer heap" used to power separately owned instances of `Delay`.
 ///
 /// This timer is implemented as a priority queued-based heap. Each `Timer`
 /// contains a few primary methods which which to drive it:
@@ -118,9 +98,7 @@ pub struct TimerHandle {
 }
 
 mod delay;
-mod interval;
 pub use self::delay::Delay;
-pub use self::interval::Interval;
 
 struct Inner {
     /// List of updates the `Timer` needs to process

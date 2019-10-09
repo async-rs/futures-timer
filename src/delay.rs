@@ -148,11 +148,6 @@ impl Delay {
     }
 }
 
-#[inline]
-pub fn fires_at(timeout: &Delay) -> Instant {
-    timeout.when
-}
-
 impl Future for Delay {
     type Output = io::Result<()>;
 
