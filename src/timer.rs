@@ -220,7 +220,7 @@ static HANDLE_FALLBACK: AtomicUsize = AtomicUsize::new(0);
 
 /// Error returned from `TimerHandle::set_fallback`.
 #[derive(Clone, Debug)]
-pub struct SetDefaultError(());
+struct SetDefaultError(());
 
 impl TimerHandle {
     /// Configures this timer handle to be the one returned by
@@ -245,7 +245,7 @@ impl TimerHandle {
     /// thread otherwise loses a race to call this method then it will fail
     /// returning an error. Once a call to `set_as_global_fallback` is
     /// successful then no future calls may succeed.
-    pub fn set_as_global_fallback(self) -> Result<(), SetDefaultError> {
+    fn set_as_global_fallback(self) -> Result<(), SetDefaultError> {
         unsafe {
             let val = self.into_usize();
             match HANDLE_FALLBACK.compare_exchange(0, val, SeqCst, SeqCst) {

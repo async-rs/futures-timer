@@ -45,7 +45,7 @@ impl Delay {
     ///
     /// The returned instance of `Delay` will be bound to the timer specified by
     /// the `handle` argument.
-    pub fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
+    fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
             None => {
