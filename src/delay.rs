@@ -42,8 +42,8 @@ impl Delay {
 
     /// Return the `Instant` when this delay will fire.
     #[inline]
-    pub fn when(&self, timeout: &Delay) -> Instant {
-        timeout.when
+    pub fn when(&self) -> Instant {
+        self.when
     }
 
     /// Creates a new future which will fire at the time specified by `at`.
