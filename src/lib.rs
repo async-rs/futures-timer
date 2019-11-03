@@ -18,6 +18,7 @@
 #![warn(missing_debug_implementations)]
 
 mod arc_list;
+mod atomic_waker;
 mod delay;
 mod global;
 mod heap;
@@ -25,6 +26,7 @@ mod heap_timer;
 mod timer;
 
 use arc_list::{ArcList, Node};
+use atomic_waker::AtomicWaker;
 use heap::{Heap, Slot};
 use heap_timer::HeapTimer;
 use timer::{ScheduledTimer, Timer, TimerHandle};
