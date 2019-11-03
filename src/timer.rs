@@ -8,9 +8,9 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 
 use futures_core::future::Future;
-use futures_util::task::AtomicWaker;
 
-use super::{global, ArcList, Heap, HeapTimer, Node, Slot};
+use crate::AtomicWaker;
+use crate::{global, ArcList, Heap, HeapTimer, Node, Slot};
 
 /// A "timer heap" used to power separately owned instances of `Delay`.
 ///
