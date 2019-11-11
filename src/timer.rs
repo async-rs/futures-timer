@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
 use std::time::Instant;
 
-use futures_core::future::Future;
+use std::future::Future;
 
 use crate::AtomicWaker;
 use crate::{global, ArcList, Heap, HeapTimer, Node, Slot};
