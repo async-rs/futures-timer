@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use async_std;
 use futures_timer::Delay;
 
 #[async_std::test]

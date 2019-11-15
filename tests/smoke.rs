@@ -2,7 +2,6 @@ use std::error::Error;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
-use async_std;
 use futures_timer::Delay;
 
 #[async_std::test]
