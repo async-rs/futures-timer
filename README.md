@@ -1,7 +1,5 @@
 # futures-timer
 
-[![Build Status](https://api.travis-ci.com/rustasync/futures-timer.svg?branch=master)](https://travis-ci.com/rustasync/futures-timer)
-
 [Documentation](https://docs.rs/futures-timer)
 
 A library for working with timers, timeouts, and intervals with the `futures`
