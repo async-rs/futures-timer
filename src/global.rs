@@ -1,14 +1,13 @@
 use std::future::Future;
 use std::io;
 use std::mem::{self, ManuallyDrop};
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, RawWaker, RawWakerVTable, Waker};
 use std::thread;
 use std::thread::Thread;
 use std::time::Instant;
-
-use pin_utils::pin_mut;
 
 use crate::{Timer, TimerHandle};
 
@@ -56,13 +55,12 @@ impl Drop for HelperThread {
     }
 }
 
-fn run(timer: Timer, done: Arc<AtomicBool>) {
+fn run(mut timer: Timer, done: Arc<AtomicBool>) {
     let waker = current_thread_waker();
     let mut cx = Context::from_waker(&waker);
 
-    pin_mut!(timer);
     while !done.load(Ordering::SeqCst) {
-        let _ = timer.as_mut().poll(&mut cx);
+        let _ = Pin::new(&mut timer).poll(&mut cx);
 
         timer.advance();
         match timer.next_event() {
