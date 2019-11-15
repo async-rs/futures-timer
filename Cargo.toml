@@ -13,7 +13,6 @@ Timeouts and intervals for futures.
 """
 
 [dependencies]
-futures-core = "0.3.1"
 
 [dev-dependencies]
 async-std = { version = "1.0.1", features = ["attributes"] }

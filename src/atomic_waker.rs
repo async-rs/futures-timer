@@ -74,11 +74,13 @@ impl AtomicWaker {
     /// Here is how `register` is used when implementing a flag.
     ///
     /// ```
-    /// use futures::future::Future;
-    /// use futures::task::{Context, Poll, AtomicWaker};
+    /// use std::future::Future;
+    /// use std::task::{Context, Poll};
     /// use std::sync::atomic::AtomicBool;
     /// use std::sync::atomic::Ordering::SeqCst;
     /// use std::pin::Pin;
+    ///
+    /// use futures::task::AtomicWaker;
     ///
     /// struct Flag {
     ///     waker: AtomicWaker,

@@ -7,7 +7,6 @@
 //! # async fn main() {
 //! use std::time::Duration;
 //! use futures_timer::Delay;
-//! use futures::prelude::*;
 //!
 //! let now = Delay::new(Duration::from_secs(3)).await;
 //! println!("waited for 3 secs");
