@@ -3,7 +3,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! # #[runtime::main]
+//! # #[async_std::main]
 //! # async fn main() {
 //! use std::time::Duration;
 //! use futures_timer::Delay;

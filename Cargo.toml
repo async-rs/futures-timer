@@ -13,9 +13,9 @@ Timeouts and intervals for futures.
 """
 
 [dependencies]
-futures-core = "0.3.0"
+futures-core = "0.3.1"
 pin-utils = "0.1.0-alpha.4"
 
 [dev-dependencies]
-futures = "0.3.0"
-runtime = "0.3.0-alpha.8"
+async-std = { version = "1.0.1", features = ["attributes"] }
+futures = "0.3.1"
