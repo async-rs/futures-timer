@@ -2,9 +2,10 @@ use std::error::Error;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
+use async_std;
 use futures_timer::Delay;
 
-#[runtime::test]
+#[async_std::test]
 async fn works() {
     let i = Instant::now();
     let dur = Duration::from_millis(100);
@@ -12,7 +13,7 @@ async fn works() {
     assert!(i.elapsed() > dur);
 }
 
-#[runtime::test]
+#[async_std::test]
 async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let i = Instant::now();
     let dur = Duration::from_millis(100);

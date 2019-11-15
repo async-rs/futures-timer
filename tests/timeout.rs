@@ -1,9 +1,10 @@
 use std::error::Error;
 use std::time::{Duration, Instant};
 
+use async_std;
 use futures_timer::Delay;
 
-#[runtime::test]
+#[async_std::test]
 async fn smoke() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let dur = Duration::from_millis(10);
     let start = Instant::now();
@@ -12,7 +13,7 @@ async fn smoke() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     Ok(())
 }
 
-#[runtime::test]
+#[async_std::test]
 async fn two() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let dur = Duration::from_millis(10);
     Delay::new(dur).await;
