@@ -9,7 +9,7 @@ repository = "https://github.com/async-rs/futures-timer"
 homepage = "https://github.com/async-rs/futures-timer"
 documentation = "https://docs.rs/futures-timer"
 description = """
-Timeouts and intervals for futures.
+Timeouts for futures.
 """
 
 [dependencies]
