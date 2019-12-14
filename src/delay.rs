@@ -10,7 +10,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use crate::Instant;
 
 use crate::arc_list::Node;
 use crate::AtomicWaker;

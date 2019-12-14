@@ -5,8 +5,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
-use std::time::Instant;
-
+use crate::Instant;
 use std::future::Future;
 
 use crate::AtomicWaker;
