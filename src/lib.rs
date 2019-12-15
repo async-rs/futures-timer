@@ -19,13 +19,13 @@
 mod arc_list;
 mod atomic_waker;
 mod delay;
-mod heap;
-mod heap_timer;
-mod timer;
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod global_native;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod global_wasm;
+mod heap;
+mod heap_timer;
+mod timer;
 
 use arc_list::{ArcList, Node};
 use atomic_waker::AtomicWaker;

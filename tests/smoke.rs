@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::pin::Pin;
-use std::time::Duration;
-use crate::Instant;
+use std::time::{Duration, Instant};
 
 use futures_timer::Delay;
 

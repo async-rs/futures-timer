@@ -1,12 +1,12 @@
+use crate::Instant;
 use std::fmt;
+use std::future::Future;
 use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
-use crate::Instant;
-use std::future::Future;
 
 use crate::AtomicWaker;
 use crate::{ArcList, Heap, HeapTimer, Node, Slot};
@@ -283,7 +283,6 @@ impl Default for TimerHandle {
                     Ok(helper) => helper,
                     Err(_) => return TimerHandle { inner: Weak::new() },
                 };
-
 
                 // If we successfully set ourselves as the actual fallback then we
                 // want to `forget` the helper thread to ensure that it persists

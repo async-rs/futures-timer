@@ -1,6 +1,5 @@
 use std::error::Error;
-use std::time::Duration;
-use crate::Instant;
+use std::time::{Duration, Instant};
 
 use futures_timer::Delay;
 

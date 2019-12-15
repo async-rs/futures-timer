@@ -1,6 +1,6 @@
+use crate::Instant;
 use std::cmp::Ordering;
 use std::sync::Arc;
-use crate::Instant;
 
 use crate::{Node, ScheduledTimer};
 

@@ -3,6 +3,7 @@
 //! This module contains the `Delay` type which is a future that will resolve
 //! at a particular point in the future.
 
+use crate::Instant;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
@@ -11,7 +12,6 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
-use crate::Instant;
 
 use crate::arc_list::Node;
 use crate::AtomicWaker;
