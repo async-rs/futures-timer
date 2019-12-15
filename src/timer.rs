@@ -9,7 +9,7 @@ use crate::Instant;
 use std::future::Future;
 
 use crate::AtomicWaker;
-use crate::{global, ArcList, Heap, HeapTimer, Node, Slot};
+use crate::{ArcList, Heap, HeapTimer, Node, Slot};
 
 /// A "timer heap" used to power separately owned instances of `Delay`.
 ///
@@ -279,7 +279,7 @@ impl Default for TimerHandle {
         if fallback == 0 {
             #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
             {
-                let helper = match global::HelperThread::new() {
+                let helper = match crate::global_native::HelperThread::new() {
                     Ok(helper) => helper,
                     Err(_) => return TimerHandle { inner: Weak::new() },
                 };
@@ -303,6 +303,7 @@ impl Default for TimerHandle {
             {
                 let handle = crate::global_wasm::run();
 
+                // Same as above.
                 if handle.clone().set_as_global_fallback().is_ok() {
                     return handle;
                 }

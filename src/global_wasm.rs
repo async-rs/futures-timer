@@ -12,7 +12,7 @@ use crate::{Instant, Timer, TimerHandle};
 
 /// Starts a background task, creates a `Timer`, and returns a handle to it.
 ///
-/// > **Note**: Contrary to the original `futures-timer` crate, we don't have
+/// > **Note**: Contrary to the native implementation, we don't have
 /// >           any `forget()` method, as the task is automatically considered
 /// >           as "forgotten".
 pub(crate) fn run() -> TimerHandle {
