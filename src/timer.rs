@@ -277,23 +277,37 @@ impl Default for TimerHandle {
         // handle which will return errors when timer objects are attempted to
         // be associated.
         if fallback == 0 {
-            let helper = match global::HelperThread::new() {
-                Ok(helper) => helper,
-                Err(_) => return TimerHandle { inner: Weak::new() },
-            };
+            #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+            {
+                let helper = match global::HelperThread::new() {
+                    Ok(helper) => helper,
+                    Err(_) => return TimerHandle { inner: Weak::new() },
+                };
 
-            // If we successfully set ourselves as the actual fallback then we
-            // want to `forget` the helper thread to ensure that it persists
-            // globally. If we fail to set ourselves as the fallback that means
-            // that someone was racing with this call to
-            // `TimerHandle::default`.  They ended up winning so we'll destroy
-            // our helper thread (which shuts down the thread) and reload the
-            // fallback.
-            if helper.handle().set_as_global_fallback().is_ok() {
-                let ret = helper.handle();
-                helper.forget();
-                return ret;
+
+                // If we successfully set ourselves as the actual fallback then we
+                // want to `forget` the helper thread to ensure that it persists
+                // globally. If we fail to set ourselves as the fallback that means
+                // that someone was racing with this call to
+                // `TimerHandle::default`.  They ended up winning so we'll destroy
+                // our helper thread (which shuts down the thread) and reload the
+                // fallback.
+                if helper.handle().set_as_global_fallback().is_ok() {
+                    let ret = helper.handle();
+                    helper.forget();
+                    return ret;
+                }
             }
+
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+            {
+                let handle = crate::global_wasm::run();
+
+                if handle.clone().set_as_global_fallback().is_ok() {
+                    return handle;
+                }
+            }
+
             fallback = HANDLE_FALLBACK.load(SeqCst);
         }
 

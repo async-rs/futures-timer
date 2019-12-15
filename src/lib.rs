@@ -23,6 +23,8 @@ mod global;
 mod heap;
 mod heap_timer;
 mod timer;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod global_wasm;
 
 use arc_list::{ArcList, Node};
 use atomic_waker::AtomicWaker;
