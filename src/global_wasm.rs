@@ -1,9 +1,9 @@
 use futures::task::{self, ArcWake};
-use std::sync::Mutex;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::task::Context;
 use std::time::Duration;
 use wasm_bindgen::{closure::Closure, JsCast};

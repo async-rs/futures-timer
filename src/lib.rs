@@ -34,7 +34,7 @@ use heap_timer::HeapTimer;
 use timer::{ScheduledTimer, Timer, TimerHandle};
 
 pub use self::delay::Delay;
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use wasm_timer::Instant;
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 use std::time::Instant;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use wasm_timer::Instant;
