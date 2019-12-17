@@ -1,5 +1,5 @@
 use futures::task::{self, ArcWake};
-use parking_lot::Mutex;
+use std::sync::Mutex;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::pin::Pin;
@@ -26,10 +26,10 @@ pub(crate) fn run() -> TimerHandle {
 /// processes everything.
 fn schedule_callback(timer: Arc<Mutex<Timer>>, when: Duration) {
     let window = web_sys::window().expect("Unable to access Window");
-    let _ = window
+    window
         .set_timeout_with_callback_and_timeout_and_arguments_0(
             &Closure::once_into_js(move || {
-                let mut timer_lock = timer.lock();
+                let mut timer_lock = timer.lock().unwrap();
 
                 // We start by polling the timer. If any new `Delay` is created, the waker will be used
                 // to wake up this task pre-emptively. As such, we pass a `Waker` that calls
