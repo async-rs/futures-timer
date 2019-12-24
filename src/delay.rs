@@ -19,11 +19,10 @@ use crate::{ScheduledTimer, TimerHandle};
 /// A future representing the notification that an elapsed duration has
 /// occurred.
 ///
-/// This is created through the `Delay::new` or `Delay::new_at` methods
-/// indicating when the future should fire at.  Note that these futures are not
-/// intended for high resolution timers, but rather they will likely fire some
-/// granularity after the exact instant that they're otherwise indicated to
-/// fire at.
+/// This is created through the `Delay::new` method indicating when the future should fire.
+/// Note that these futures are not intended for high resolution timers, but rather they will
+/// likely fire some granularity after the exact instant that they're otherwise indicated to fire
+/// at.
 pub struct Delay {
     state: Option<Arc<Node<ScheduledTimer>>>,
     when: Instant,
