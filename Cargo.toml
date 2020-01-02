@@ -14,7 +14,7 @@ Timeouts for futures.
 
 [dependencies]
 wasm-timer = { version = "0.2.4", optional = true }
-wasm-bindgen-crate = { package = "wasm-bindgen", version = "0.2.55", optional = true }
+wasm-bindgen = { version = "0.2.55", optional = true }
 futures = { version = "0.3.1", optional = true }
 web-sys = { version = "0.3.32", optional = true }
 
