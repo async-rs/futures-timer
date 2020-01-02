@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::task::Context;
 use std::time::Duration;
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen_crate::{closure::Closure, JsCast};
 
 use crate::{Instant, Timer, TimerHandle};
 

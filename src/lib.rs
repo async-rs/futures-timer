@@ -19,9 +19,9 @@
 mod arc_list;
 mod atomic_waker;
 mod delay;
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(not(feature = "wasm-bindgen"))]
 mod global_native;
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[cfg(feature = "wasm-bindgen")]
 mod global_wasm;
 mod heap;
 mod heap_timer;
@@ -34,7 +34,7 @@ use heap_timer::HeapTimer;
 use timer::{ScheduledTimer, Timer, TimerHandle};
 
 pub use self::delay::Delay;
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(not(feature = "wasm-bindgen"))]
 use std::time::Instant;
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[cfg(feature = "wasm-bindgen")]
 use wasm_timer::Instant;
