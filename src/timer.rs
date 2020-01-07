@@ -277,7 +277,7 @@ impl Default for TimerHandle {
         // handle which will return errors when timer objects are attempted to
         // be associated.
         if fallback == 0 {
-            #[cfg(not(feature = "wasm-bindgen"))]
+            #[cfg(not(target_arch = "wasm32"))]
             {
                 let helper = match crate::global_native::HelperThread::new() {
                     Ok(helper) => helper,
@@ -298,7 +298,7 @@ impl Default for TimerHandle {
                 }
             }
 
-            #[cfg(feature = "wasm-bindgen")]
+            #[cfg(all(feature = "wasm-bindgen", target_arch = "wasm32"))]
             {
                 let handle = crate::global_wasm::run();
 
@@ -307,6 +307,8 @@ impl Default for TimerHandle {
                     return handle;
                 }
             }
+            #[cfg(all(not(feature = "wasm-bindgen"), target_arch = "wasm32"))]
+            compile_error!("The `wasm-bindgen` feature must be used when compiling to wasm.");
 
             fallback = HANDLE_FALLBACK.load(SeqCst);
         }
