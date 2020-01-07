@@ -19,7 +19,7 @@
 mod arc_list;
 mod atomic_waker;
 mod delay;
-#[cfg(not(feature = "wasm-bindgen"))]
+#[cfg(not(target_arch = "wasm32"))]
 mod global_native;
 #[cfg(feature = "wasm-bindgen")]
 mod global_wasm;
