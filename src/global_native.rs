@@ -84,7 +84,7 @@ static VTABLE: RawWakerVTable = RawWakerVTable::new(raw_clone, raw_wake, raw_wak
 
 fn raw_clone(ptr: *const ()) -> RawWaker {
     let me = ManuallyDrop::new(unsafe { Arc::from_raw(ptr as *const Thread) });
-    mem::forget(me.clone());
+    mem::forget(me);
     RawWaker::new(ptr, &VTABLE)
 }
 
