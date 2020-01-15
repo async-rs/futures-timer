@@ -17,9 +17,11 @@ impl Delay {
 		)
 	}
 
-	/// Resets the timeout. Does nothing on wasm.
+	/// Resets the timeout. Panics on wasm.
 	#[inline]
-	pub fn reset(&mut self, at: Instant) {}
+	pub fn reset(&mut self, at: Instant) {
+		panic!("Resetting the timeout is not supported on wasm.")
+	}
 }
 
 impl Future for Delay {
