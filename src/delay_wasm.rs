@@ -2,7 +2,7 @@
 
 use gloo_timers::future::TimeoutFuture;
 use send_wrapper::SendWrapper;
-use std::{time::Duration, pin::Pin, task::{Context, Poll}, future::Future};
+use std::{time::{Duration, Instant}, pin::Pin, task::{Context, Poll}, future::Future};
 
 /// A version of `Delay` that works on wasm.
 #[derive(Debug)]
@@ -16,6 +16,10 @@ impl Delay {
 			SendWrapper::new(TimeoutFuture::new(dur.as_millis() as u32))
 		)
 	}
+
+	/// Resets the timeout. Does nothing on wasm.
+	#[inline]
+	pub fn reset(&mut self, at: Instant) {}
 }
 
 impl Future for Delay {
