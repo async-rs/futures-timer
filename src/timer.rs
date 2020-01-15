@@ -1,15 +1,16 @@
-use crate::Instant;
 use std::fmt;
-use std::future::Future;
 use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll};
+use std::time::Instant;
+
+use std::future::Future;
 
 use crate::AtomicWaker;
-use crate::{ArcList, Heap, HeapTimer, Node, Slot};
+use crate::{global, ArcList, Heap, HeapTimer, Node, Slot};
 
 /// A "timer heap" used to power separately owned instances of `Delay`.
 ///
@@ -277,39 +278,23 @@ impl Default for TimerHandle {
         // handle which will return errors when timer objects are attempted to
         // be associated.
         if fallback == 0 {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let helper = match crate::global_native::HelperThread::new() {
-                    Ok(helper) => helper,
-                    Err(_) => return TimerHandle { inner: Weak::new() },
-                };
+            let helper = match global::HelperThread::new() {
+                Ok(helper) => helper,
+                Err(_) => return TimerHandle { inner: Weak::new() },
+            };
 
-                // If we successfully set ourselves as the actual fallback then we
-                // want to `forget` the helper thread to ensure that it persists
-                // globally. If we fail to set ourselves as the fallback that means
-                // that someone was racing with this call to
-                // `TimerHandle::default`.  They ended up winning so we'll destroy
-                // our helper thread (which shuts down the thread) and reload the
-                // fallback.
-                if helper.handle().set_as_global_fallback().is_ok() {
-                    let ret = helper.handle();
-                    helper.forget();
-                    return ret;
-                }
+            // If we successfully set ourselves as the actual fallback then we
+            // want to `forget` the helper thread to ensure that it persists
+            // globally. If we fail to set ourselves as the fallback that means
+            // that someone was racing with this call to
+            // `TimerHandle::default`.  They ended up winning so we'll destroy
+            // our helper thread (which shuts down the thread) and reload the
+            // fallback.
+            if helper.handle().set_as_global_fallback().is_ok() {
+                let ret = helper.handle();
+                helper.forget();
+                return ret;
             }
-
-            #[cfg(all(feature = "wasm-bindgen", target_arch = "wasm32"))]
-            {
-                let handle = crate::global_wasm::run();
-
-                // Same as above.
-                if handle.clone().set_as_global_fallback().is_ok() {
-                    return handle;
-                }
-            }
-            #[cfg(all(not(feature = "wasm-bindgen"), target_arch = "wasm32"))]
-            compile_error!("The `wasm-bindgen` feature must be used when compiling to wasm.");
-
             fallback = HANDLE_FALLBACK.load(SeqCst);
         }
 

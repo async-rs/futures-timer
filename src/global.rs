@@ -1,4 +1,3 @@
-use crate::Instant;
 use std::future::Future;
 use std::io;
 use std::mem::{self, ManuallyDrop};
@@ -8,6 +7,7 @@ use std::sync::Arc;
 use std::task::{Context, RawWaker, RawWakerVTable, Waker};
 use std::thread;
 use std::thread::Thread;
+use std::time::Instant;
 
 use crate::{Timer, TimerHandle};
 
@@ -84,7 +84,7 @@ static VTABLE: RawWakerVTable = RawWakerVTable::new(raw_clone, raw_wake, raw_wak
 
 fn raw_clone(ptr: *const ()) -> RawWaker {
     let me = ManuallyDrop::new(unsafe { Arc::from_raw(ptr as *const Thread) });
-    mem::forget(me);
+    mem::forget(me.clone());
     RawWaker::new(ptr, &VTABLE)
 }
 
