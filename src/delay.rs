@@ -44,11 +44,7 @@ impl Delay {
     pub(crate) fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
-            None => {
-                return Delay {
-                    state: None,
-                }
-            }
+            None => return Delay { state: None },
         };
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
@@ -62,15 +58,11 @@ impl Delay {
         // timer, meaning that we'll want to immediately return an error from
         // `poll`.
         if inner.list.push(&state).is_err() {
-            return Delay {
-                state: None,
-            };
+            return Delay { state: None };
         }
 
         inner.waker.wake();
-        Delay {
-            state: Some(state),
-        }
+        Delay { state: Some(state) }
     }
 
     /// Resets this timeout to an new timeout which will fire at the time
