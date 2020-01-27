@@ -24,7 +24,7 @@ async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     assert!(i.elapsed() > dur);
 
     let i = Instant::now();
-    d.reset(Instant::now() + dur);
+    d.reset(dur);
     d.await;
     assert!(i.elapsed() > dur);
     Ok(())

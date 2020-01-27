@@ -25,7 +25,6 @@ use crate::{ScheduledTimer, TimerHandle};
 /// at.
 pub struct Delay {
     state: Option<Arc<Node<ScheduledTimer>>>,
-    when: Instant,
 }
 
 impl Delay {
@@ -38,12 +37,6 @@ impl Delay {
         Delay::new_handle(Instant::now() + dur, Default::default())
     }
 
-    /// Return the `Instant` when this delay will fire.
-    #[inline]
-    pub fn when(&self) -> Instant {
-        self.when
-    }
-
     /// Creates a new future which will fire at the time specified by `at`.
     ///
     /// The returned instance of `Delay` will be bound to the timer specified by
@@ -51,12 +44,7 @@ impl Delay {
     pub(crate) fn new_handle(at: Instant, handle: TimerHandle) -> Delay {
         let inner = match handle.inner.upgrade() {
             Some(i) => i,
-            None => {
-                return Delay {
-                    state: None,
-                    when: at,
-                }
-            }
+            None => return Delay { state: None },
         };
         let state = Arc::new(Node::new(ScheduledTimer {
             at: Mutex::new(Some(at)),
@@ -70,30 +58,23 @@ impl Delay {
         // timer, meaning that we'll want to immediately return an error from
         // `poll`.
         if inner.list.push(&state).is_err() {
-            return Delay {
-                state: None,
-                when: at,
-            };
+            return Delay { state: None };
         }
 
         inner.waker.wake();
-        Delay {
-            state: Some(state),
-            when: at,
-        }
+        Delay { state: Some(state) }
     }
 
     /// Resets this timeout to an new timeout which will fire at the time
     /// specified by `at`.
     #[inline]
-    pub fn reset(&mut self, at: Instant) {
-        self.when = at;
-        if self._reset(self.when).is_err() {
+    pub fn reset(&mut self, dur: Duration) {
+        if self._reset(dur).is_err() {
             self.state = None
         }
     }
 
-    fn _reset(&mut self, at: Instant) -> Result<(), ()> {
+    fn _reset(&mut self, dur: Duration) -> Result<(), ()> {
         let state = match self.state {
             Some(ref state) => state,
             None => return Err(()),
@@ -111,7 +92,7 @@ impl Delay {
                     Err(s) => bits = s,
                 }
             }
-            *state.at.lock().unwrap() = Some(at);
+            *state.at.lock().unwrap() = Some(Instant::now() + dur);
             // If we fail to push our node then we've become an inert timer, so
             // we'll want to clear our `state` field accordingly
             timeouts.list.push(state)?;
@@ -165,6 +146,6 @@ impl Drop for Delay {
 
 impl fmt::Debug for Delay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.debug_struct("Delay").field("when", &self.when).finish()
+        f.debug_struct("Delay").finish()
     }
 }
