@@ -22,7 +22,7 @@ impl Delay {
 
     /// Resets the timeout.
     #[inline]
-    pub fn reset(&mut self, at: Duration) {
+    pub fn reset(&mut self, dur: Duration) {
         *self = Delay::new(at);
     }
 }
