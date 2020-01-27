@@ -12,9 +12,9 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use crate::arc_list::Node;
-use crate::AtomicWaker;
-use crate::{ScheduledTimer, TimerHandle};
+use super::arc_list::Node;
+use super::AtomicWaker;
+use super::{ScheduledTimer, TimerHandle};
 
 /// A future representing the notification that an elapsed duration has
 /// occurred.

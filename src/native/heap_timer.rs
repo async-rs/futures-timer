@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::{Node, ScheduledTimer};
+use super::{Node, ScheduledTimer};
 
 /// Entries in the timer heap, sorted by the instant they're firing at and then
 /// also containing some payload data.
