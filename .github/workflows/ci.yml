@@ -71,5 +71,5 @@ jobs:
       - uses: actions/checkout@master
       - name: Install Rust and add wasm target
         run: rustup update stable && rustup target add wasm32-unknown-unknown
-      - name: cargo test
-        run: cargo test --target wasm32-unknown-unknown --features wasm-bindgen
+      - name: cargo check
+        run: cargo check --target wasm32-unknown-unknown --features wasm-bindgen
