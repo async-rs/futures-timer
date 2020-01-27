@@ -20,9 +20,9 @@ impl Delay {
         Self(SendWrapper::new(TimeoutFuture::new(dur.as_millis() as u32)))
     }
 
-    /// Resets the timeout. Panics on wasm.
+    /// Resets the timeout.
     #[inline]
-    pub fn reset(&mut self, at: Duration) {
+    pub fn reset(&mut self, dur: Duration) {
         *self = Delay::new(at);
     }
 }
