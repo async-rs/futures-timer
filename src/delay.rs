@@ -68,7 +68,7 @@ impl Delay {
     /// Resets this timeout to an new timeout which will fire at the time
     /// specified by `at`.
     #[inline]
-    pub fn reset(&mut self, delay: Duration) {
+    pub fn reset(&mut self, dur: Duration) {
         if self._reset(delay).is_err() {
             self.state = None
         }
