@@ -64,12 +64,12 @@ jobs:
         if: github.event_name == 'push' && github.event.ref == 'refs/heads/master' && github.repository == 'async-rs/futures-timer'
 
   check_wasm:
-    name: Check WASM
+    name: Check Wasm
     needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - name: Install Rust
+      - name: Install Rust and add wasm target
         run: rustup update stable && rustup target add wasm32-unknown-unknown
       - name: cargo test
         run: cargo test --target wasm32-unknown-unknown --features wasm-bindgen
