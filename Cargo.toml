@@ -22,6 +22,6 @@ futures = "0.3.1"
 
 [features]
 wasm-bindgen = [
-	"gloo-timers",
-	"send_wrapper"
+    "gloo-timers",
+    "send_wrapper"
 ]
