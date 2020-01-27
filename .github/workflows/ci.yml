@@ -31,7 +31,6 @@ jobs:
       fail-fast: false
       matrix:
         component:
-          - clippy
           - rustfmt
     steps:
       - uses: actions/checkout@master
@@ -41,9 +40,6 @@ jobs:
       - name: Install component
         shell: bash
         run: rustup component add ${{ matrix.component }}
-      - name: cargo clippy
-        if: matrix.component == 'clippy'
-        run: cargo clippy --all-features
       - name: cargo fmt
         if: matrix.component == 'rustfmt'
         run: cargo fmt -- --check
