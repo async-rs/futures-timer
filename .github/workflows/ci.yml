@@ -1,9 +1,6 @@
 name: CI
 on: [push, pull_request]
 
-env:
-  RUSTFLAGS: -Dwarnings
-
 jobs:
   test:
     name: Test
