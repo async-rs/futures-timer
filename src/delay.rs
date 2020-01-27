@@ -69,12 +69,12 @@ impl Delay {
     /// specified by `at`.
     #[inline]
     pub fn reset(&mut self, dur: Duration) {
-        if self._reset(delay).is_err() {
+        if self._reset(dur).is_err() {
             self.state = None
         }
     }
 
-    fn _reset(&mut self, delay: Duration) -> Result<(), ()> {
+    fn _reset(&mut self, dur: Duration) -> Result<(), ()> {
         let state = match self.state {
             Some(ref state) => state,
             None => return Err(()),
@@ -92,7 +92,7 @@ impl Delay {
                     Err(s) => bits = s,
                 }
             }
-            *state.at.lock().unwrap() = Some(Instant::now() + delay);
+            *state.at.lock().unwrap() = Some(Instant::now() + dur);
             // If we fail to push our node then we've become an inert timer, so
             // we'll want to clear our `state` field accordingly
             timeouts.list.push(state)?;
