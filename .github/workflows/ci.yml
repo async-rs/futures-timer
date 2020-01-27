@@ -70,6 +70,6 @@ jobs:
     steps:
       - uses: actions/checkout@master
       - name: Install Rust
-        run: rustup update stable && rustup add target wasm32-unknown-unknown
+        run: rustup update stable && rustup target add wasm32-unknown-unknown
       - name: cargo test
         run: cargo test --target wasm32-unknown-unknown --features wasm-bindgen
