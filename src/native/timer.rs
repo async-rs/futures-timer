@@ -9,8 +9,8 @@ use std::time::Instant;
 
 use std::future::Future;
 
-use crate::AtomicWaker;
-use crate::{global, ArcList, Heap, HeapTimer, Node, Slot};
+use super::AtomicWaker;
+use super::{global, ArcList, Heap, HeapTimer, Node, Slot};
 
 /// A "timer heap" used to power separately owned instances of `Delay`.
 ///

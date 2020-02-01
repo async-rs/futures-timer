@@ -62,3 +62,14 @@ jobs:
           git -c user.name='ci' -c user.email='ci' commit -m 'Deploy futures-timer API documentation'
           git push -f -q https://git:${{ secrets.github_token }}@github.com/${{ github.repository }} HEAD:gh-pages
         if: github.event_name == 'push' && github.event.ref == 'refs/heads/master' && github.repository == 'async-rs/futures-timer'
+
+  check_wasm:
+    name: Check Wasm
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust and add wasm target
+        run: rustup update stable && rustup target add wasm32-unknown-unknown
+      - name: cargo check
+        run: cargo check --target wasm32-unknown-unknown --features wasm-bindgen

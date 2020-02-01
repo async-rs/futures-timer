@@ -9,7 +9,7 @@ use std::thread;
 use std::thread::Thread;
 use std::time::Instant;
 
-use crate::{Timer, TimerHandle};
+use super::{Timer, TimerHandle};
 
 pub struct HelperThread {
     thread: Option<thread::JoinHandle<()>>,
