@@ -1,9 +1,9 @@
 mod arc_list;
 mod atomic_waker;
-mod delay;
-mod global;
 mod bin_heap;
 mod bin_heap_timer;
+mod delay;
+mod global;
 mod timer;
 
 use self::arc_list::{ArcList, Node};
