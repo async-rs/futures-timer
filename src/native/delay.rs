@@ -34,7 +34,12 @@ impl Delay {
     /// The default timer will be spun up in a helper thread on first use.
     #[inline]
     pub fn new(dur: Duration) -> Delay {
-        Delay::new_handle(Instant::now() + dur, Default::default())
+        Delay::new_handle(
+            Instant::now()
+                .checked_add(dur)
+                .unwrap_or_else(Self::max_instant),
+            Default::default(),
+        )
     }
 
     /// Creates a new future which will fire at the time specified by `at`.
@@ -74,6 +79,21 @@ impl Delay {
         }
     }
 
+    fn max_instant() -> Instant {
+        let mut max = Instant::now();
+        let mut duration = Duration::MAX;
+
+        while duration > Duration::ZERO {
+            if let Some(new_max) = max.checked_add(duration) {
+                max = new_max;
+            } else {
+                duration /= 2;
+            }
+        }
+
+        max
+    }
+
     fn _reset(&mut self, dur: Duration) -> Result<(), ()> {
         let state = match self.state {
             Some(ref state) => state,
@@ -92,7 +112,11 @@ impl Delay {
                     Err(s) => bits = s,
                 }
             }
-            *state.at.lock().unwrap() = Some(Instant::now() + dur);
+            *state.at.lock().unwrap() = Some(
+                Instant::now()
+                    .checked_add(dur)
+                    .unwrap_or_else(Self::max_instant),
+            );
             // If we fail to push our node then we've become an inert timer, so
             // we'll want to clear our `state` field accordingly
             timeouts.list.push(state)?;
