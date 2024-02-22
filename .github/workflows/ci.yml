@@ -2,7 +2,7 @@ name: CI
 on: [push, pull_request]
 
 # env:
-# RUSTFLAGS: -Dwarnings
+#   RUSTFLAGS: -Dwarnings
 
 jobs:
   test:
@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - 1.39.0
+          - 1.56.0
           - stable
           - beta
           - nightly
