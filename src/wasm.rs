@@ -11,13 +11,15 @@ use std::{
 
 /// A version of `Delay` that works on wasm.
 #[derive(Debug)]
-pub struct Delay(SendWrapper<TimeoutFuture>);
+pub struct Delay(Option<SendWrapper<TimeoutFuture>>);
 
 impl Delay {
     /// Creates a new future which will fire at `dur` time into the future.
     #[inline]
     pub fn new(dur: Duration) -> Delay {
-        Self(SendWrapper::new(TimeoutFuture::new(dur.as_millis() as u32)))
+        Self(Some(SendWrapper::new(TimeoutFuture::new(
+            dur.as_millis() as u32
+        ))))
     }
 
     /// Resets the timeout.
@@ -30,7 +32,16 @@ impl Delay {
 impl Future for Delay {
     type Output = ();
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        Pin::new(&mut *Pin::into_inner(self).0).poll(cx)
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        match self.0.as_mut() {
+            Some(delay) => match Pin::new(&mut **delay).poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(()) => {
+                    self.0.take();
+                    Poll::Ready(())
+                }
+            },
+            None => Poll::Ready(()),
+        }
     }
 }

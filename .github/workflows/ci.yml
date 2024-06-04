@@ -21,6 +21,26 @@ jobs:
       - name: cargo doc
         run: cargo doc --no-deps
 
+  test_wasm:
+    name: Test (wasm)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust and add wasm target
+        run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }} && rustup target add wasm32-unknown-unknown
+      - name: Install wasm-pack
+        uses: taiki-e/cache-cargo-install-action@v1
+        with:
+          tool: wasm-pack@0.12.1
+      - name: cargo test
+        run: wasm-pack test --firefox --headless -- --features=wasm-bindgen
+      - name: cargo doc
+        run: cargo doc --no-deps --target=wasm32-unknown-unknown --features=wasm-bindgen
+
   style:
     name: Style
     runs-on: ubuntu-latest
@@ -59,14 +79,3 @@ jobs:
           git -c user.name='ci' -c user.email='ci' commit -m 'Deploy futures-timer API documentation'
           git push -f -q https://git:${{ secrets.github_token }}@github.com/${{ github.repository }} HEAD:gh-pages
         if: github.event_name == 'push' && github.event.ref == 'refs/heads/master' && github.repository == 'async-rs/futures-timer'
-
-  check_wasm:
-    name: Check Wasm
-    needs: [test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@master
-      - name: Install Rust and add wasm target
-        run: rustup update stable && rustup target add wasm32-unknown-unknown
-      - name: cargo check
-        run: cargo check --target wasm32-unknown-unknown --features wasm-bindgen
