@@ -29,3 +29,10 @@ async fn reset() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     assert!(i.elapsed() > dur);
     Ok(())
 }
+
+#[test]
+fn overflow() {
+    // Could have overflown if wasn't implemented correctly
+    let mut delay = Delay::new(Duration::MAX);
+    delay.reset(Duration::MAX);
+}
