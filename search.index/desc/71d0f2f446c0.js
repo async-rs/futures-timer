@@ -1,0 +1,1 @@
+rd_("DjCreates a new future which will fire at <code>dur</code> time into the \xe2\x80\xa6AoReturns the argument unchanged.BaCalls <code>U::from(self)</code>.CjA future representing the notification that an elapsed \xe2\x80\xa6ClResets this timeout to an new timeout which will fire at \xe2\x80\xa6CiA general purpose crate for working with timeouts and \xe2\x80\xa6")
