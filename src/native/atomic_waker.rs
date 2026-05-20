@@ -41,10 +41,6 @@ const WAKING: usize = 0b10;
 impl AtomicWaker {
     /// Create an `AtomicWaker`.
     pub fn new() -> AtomicWaker {
-        // Make sure that task is Sync
-        trait AssertSync: Sync {}
-        impl AssertSync for Waker {}
-
         AtomicWaker {
             state: AtomicUsize::new(WAITING),
             waker: UnsafeCell::new(None),
@@ -104,8 +100,11 @@ impl AtomicWaker {
     /// }
     /// ```
     pub fn register(&self, waker: &Waker) {
-        match self.state.compare_and_swap(WAITING, REGISTERING, Acquire) {
-            WAITING => {
+        match self
+            .state
+            .compare_exchange(WAITING, REGISTERING, Acquire, Acquire)
+        {
+            Ok(_) => {
                 unsafe {
                     // Locked acquired, update the waker cell
                     *self.waker.get() = Some(waker.clone());
@@ -144,13 +143,13 @@ impl AtomicWaker {
                     }
                 }
             }
-            WAKING => {
+            Err(WAKING) => {
                 // Currently in the process of waking the task, i.e.,
                 // `wake` is currently being called on the old task handle.
                 // So, we call wake on the new waker
                 waker.wake_by_ref();
             }
-            state => {
+            Err(state) => {
                 // In this case, a concurrent thread is holding the
                 // "registering" lock. This probably indicates a bug in the
                 // caller's code as racing to call `register` doesn't make much
