@@ -82,21 +82,21 @@ fn run(mut timer: Timer, done: Arc<AtomicBool>) {
 
 static VTABLE: RawWakerVTable = RawWakerVTable::new(raw_clone, raw_wake, raw_wake_by_ref, raw_drop);
 
-fn raw_clone(ptr: *const ()) -> RawWaker {
+unsafe fn raw_clone(ptr: *const ()) -> RawWaker {
     let me = ManuallyDrop::new(unsafe { Arc::from_raw(ptr as *const Thread) });
     mem::forget(me.clone());
     RawWaker::new(ptr, &VTABLE)
 }
 
-fn raw_wake(ptr: *const ()) {
+unsafe fn raw_wake(ptr: *const ()) {
     unsafe { Arc::from_raw(ptr as *const Thread) }.unpark()
 }
 
-fn raw_wake_by_ref(ptr: *const ()) {
+unsafe fn raw_wake_by_ref(ptr: *const ()) {
     ManuallyDrop::new(unsafe { Arc::from_raw(ptr as *const Thread) }).unpark()
 }
 
-fn raw_drop(ptr: *const ()) {
+unsafe fn raw_drop(ptr: *const ()) {
     unsafe { Arc::from_raw(ptr as *const Thread) };
 }
 
