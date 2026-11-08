@@ -70,3 +70,7 @@ jobs:
         run: rustup update stable && rustup target add wasm32-unknown-unknown
       - name: cargo check
         run: cargo check --target wasm32-unknown-unknown --features wasm-bindgen
+      - name: Install nightly and rust-src
+        run: rustup toolchain install nightly && rustup component add rust-src --toolchain nightly
+      - name: cargo check (wasm64)
+        run: cargo +nightly check -Zbuild-std=std,panic_abort --target wasm64-unknown-unknown --features wasm-bindgen
